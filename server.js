@@ -35,7 +35,7 @@ const server = http.createServer((req, res) => {
     <longitude>${currentPlot.lon}</longitude>
     <latitude>${currentPlot.lat}</latitude>
     <altitude>0</altitude>
-    <range>100</range>
+    <range>400</range>
     <tilt>0</tilt>
     <heading>0</heading>
     <altitudeMode>relativeToGround</altitudeMode>
