@@ -1,0 +1,1534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EarthLabel</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #0f1117;
+    --panel: #1a1d27;
+    --panel-border: #2a2d3a;
+    --text: #e4e4e7;
+    --text-dim: #8b8d97;
+    --accent: #3b82f6;
+    --accent-hover: #2563eb;
+    --success: #22c55e;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+  }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+  }
+
+  /* LEFT SIDEBAR */
+  .sidebar {
+    width: 340px;
+    min-width: 340px;
+    background: var(--panel);
+    border-right: 1px solid var(--panel-border);
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+  }
+
+  .sidebar-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--panel-border);
+    background: linear-gradient(135deg, #1e2130, #1a1d27);
+  }
+
+  .sidebar-header h1 {
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+    margin-bottom: 4px;
+  }
+
+  .sidebar-header .subtitle {
+    font-size: 11px;
+    color: var(--text-dim);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .progress-bar {
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--panel-border);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 12px;
+  }
+
+  .progress-track {
+    flex: 1;
+    height: 6px;
+    background: #2a2d3a;
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: var(--success);
+    border-radius: 3px;
+    transition: width 0.3s ease;
+  }
+
+  .progress-text {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-dim);
+    min-width: 60px;
+    text-align: right;
+  }
+
+  /* PLOT LIST */
+  .plot-list {
+    flex: 1;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: #2a2d3a transparent;
+  }
+
+  .plot-item {
+    padding: 10px 20px;
+    border-bottom: 1px solid rgba(42, 45, 58, 0.5);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: background 0.15s;
+    font-size: 13px;
+  }
+
+  .plot-item:hover { background: rgba(59, 130, 246, 0.08); }
+  .plot-item.active { background: rgba(59, 130, 246, 0.15); border-left: 3px solid var(--accent); }
+  .plot-item.completed { opacity: 0.6; }
+
+  .plot-status {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .plot-status.pending { background: var(--warning); }
+  .plot-status.done { background: var(--success); }
+
+  .plot-info { flex: 1; }
+  .plot-id { font-weight: 600; font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+  .plot-label {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-top: 2px;
+  }
+
+  .plot-molca-badge {
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: 600;
+    color: #000;
+  }
+
+  /* MAP AREA */
+  .main-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .map-toolbar {
+    display: flex;
+    align-items: center;
+    padding: 10px 16px;
+    gap: 8px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--panel-border);
+    flex-wrap: wrap;
+  }
+
+  .basemap-btn {
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    font-family: 'DM Sans', sans-serif;
+    border: 1px solid var(--panel-border);
+    background: transparent;
+    color: var(--text-dim);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .basemap-btn:hover { border-color: var(--accent); color: var(--text); }
+  .basemap-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+  .toolbar-separator {
+    width: 1px;
+    height: 24px;
+    background: var(--panel-border);
+    margin: 0 4px;
+  }
+
+  .nav-btn {
+    padding: 6px 16px;
+    font-size: 12px;
+    font-weight: 600;
+    font-family: 'DM Sans', sans-serif;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .nav-btn.prev { background: #2a2d3a; color: var(--text); }
+  .nav-btn.prev:hover { background: #3a3d4a; }
+  .nav-btn.next { background: var(--accent); color: #fff; }
+  .nav-btn.next:hover { background: var(--accent-hover); }
+
+  .plot-counter {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-left: auto;
+  }
+
+  #map-wrapper {
+    flex: 1;
+    display: flex;
+    background: #0a0a0a;
+  }
+  
+  .map-pane {
+    flex: 1;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .map-pane.split-hidden {
+    display: none;
+  }
+  
+  .map-pane + .map-pane {
+    border-left: 2px solid var(--panel-border);
+  }
+  
+  .inner-map {
+    flex: 1;
+  }
+  
+  .mini-basemap-selector {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 1000;
+    background: rgba(26, 29, 39, 0.9);
+    padding: 6px;
+    border-radius: 6px;
+    display: flex;
+    gap: 4px;
+    border: 1px solid var(--panel-border);
+    backdrop-filter: blur(8px);
+  }
+  
+  .mini-basemap-selector select, .mini-basemap-selector button {
+    font-size: 11px;
+    padding: 4px 8px;
+    background: #2a2d3a;
+    border: 1px solid rgba(255,255,255,0.1);
+    color: var(--text);
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  
+  .mini-basemap-selector select { font-family: 'DM Sans', sans-serif; }
+  .mini-basemap-selector button:hover { border-color: var(--text-dim); }
+  .mini-basemap-selector button.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+
+  body.split-mode .global-basemaps { display: none !important; }
+
+  /* RIGHT PANEL - CLASSIFICATION */
+  .classify-panel {
+    width: 280px;
+    min-width: 280px;
+    background: var(--panel);
+    border-left: 1px solid var(--panel-border);
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+  }
+
+  .classify-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--panel-border);
+  }
+
+  .classify-header h2 {
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+
+  .molca-2019 {
+    font-size: 11px;
+    padding: 6px 10px;
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    border-radius: 6px;
+    margin-top: 8px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .molca-2019 span { color: var(--accent); font-weight: 600; }
+
+  .class-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+  }
+
+  .class-btn {
+    width: 100%;
+    padding: 10px 14px;
+    margin-bottom: 6px;
+    border: 2px solid transparent;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: 'DM Sans', sans-serif;
+    transition: all 0.15s;
+    background: rgba(255,255,255,0.03);
+    color: var(--text);
+  }
+
+  .class-btn:hover {
+    background: rgba(255,255,255,0.08);
+    border-color: rgba(255,255,255,0.1);
+  }
+
+  .class-btn.selected {
+    border-color: var(--accent);
+    background: rgba(59, 130, 246, 0.12);
+  }
+
+  .class-swatch {
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    flex-shrink: 0;
+    border: 1px solid rgba(255,255,255,0.15);
+  }
+
+  .class-key {
+    margin-left: auto;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+    background: #2a2d3a;
+    padding: 2px 6px;
+    border-radius: 3px;
+  }
+
+  .confidence-section {
+    padding: 12px 20px;
+    border-top: 1px solid var(--panel-border);
+  }
+
+  .confidence-section label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: block;
+    margin-bottom: 8px;
+  }
+
+  .confidence-row {
+    display: flex;
+    gap: 6px;
+  }
+
+  .conf-btn {
+    flex: 1;
+    padding: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    font-family: 'DM Sans', sans-serif;
+    border: 1px solid var(--panel-border);
+    background: transparent;
+    color: var(--text-dim);
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .conf-btn:hover { border-color: var(--text-dim); color: var(--text); }
+  .conf-btn.selected { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+  .notes-section {
+    padding: 12px 20px;
+    border-top: 1px solid var(--panel-border);
+  }
+
+  .notes-section textarea {
+    width: 100%;
+    height: 50px;
+    background: #0f1117;
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    color: var(--text);
+    padding: 8px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 12px;
+    resize: none;
+  }
+
+  .notes-section textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  .submit-section {
+    padding: 16px 20px;
+    border-top: 1px solid var(--panel-border);
+  }
+
+  .submit-btn {
+    width: 100%;
+    padding: 12px;
+    font-size: 14px;
+    font-weight: 700;
+    font-family: 'DM Sans', sans-serif;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    background: var(--success);
+    color: #000;
+    transition: all 0.15s;
+  }
+
+  .submit-btn:hover { background: #16a34a; }
+  .submit-btn:disabled { background: #2a2d3a; color: var(--text-dim); cursor: not-allowed; }
+
+  .export-btn {
+    width: 100%;
+    padding: 8px;
+    margin-top: 8px;
+    font-size: 11px;
+    font-weight: 600;
+    font-family: 'DM Sans', sans-serif;
+    border: 1px solid var(--panel-border);
+    background: transparent;
+    color: var(--text-dim);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .export-btn:hover { border-color: var(--accent); color: var(--text); }
+
+  /* Coordinate info overlay on map */
+  .coord-info {
+    position: absolute;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    background: rgba(15, 17, 23, 0.9);
+    backdrop-filter: blur(8px);
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    border: 1px solid var(--panel-border);
+  }
+
+  .filter-section {
+    padding: 10px 20px;
+    border-bottom: 1px solid var(--panel-border);
+    display: flex;
+    gap: 6px;
+  }
+
+  .filter-btn {
+    padding: 4px 10px;
+    font-size: 10px;
+    font-weight: 600;
+    font-family: 'DM Sans', sans-serif;
+    border: 1px solid var(--panel-border);
+    background: transparent;
+    color: var(--text-dim);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .filter-btn:hover { border-color: var(--text-dim); }
+  .filter-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+  .upload-section {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--panel-border);
+    text-align: center;
+  }
+
+  .upload-label {
+    display: block;
+    padding: 20px;
+    border: 2px dashed var(--panel-border);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--text-dim);
+    transition: all 0.15s;
+  }
+
+  .upload-label:hover { border-color: var(--accent); color: var(--text); }
+
+  #csv-upload { display: none; }
+
+  /* Modal */
+  .modal-overlay {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6);
+    display: flex; align-items: center; justify-content: center; z-index: 2000;
+  }
+  .modal-overlay.hidden { display: none; }
+  .modal-content {
+    background: var(--panel); padding: 20px; border-radius: 8px; border: 1px solid var(--panel-border);
+    width: 300px;
+  }
+  .modal-content h3 { font-size: 16px; margin-bottom: 12px; }
+  .modal-content input {
+    width: 100%; padding: 8px; background: #0f1117; border: 1px solid var(--panel-border);
+    color: var(--text); border-radius: 4px; margin-bottom: 16px; font-family: 'DM Sans', sans-serif;
+  }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
+</style>
+</head>
+<body>
+
+<!-- WELCOME OVERLAY -->
+<div id="welcomeOverlay" class="modal-overlay hidden">
+  <div class="modal-content" style="text-align: center;">
+    <h3 style="margin-bottom: 8px;">Welcome to EarthLabel</h3>
+    <p style="font-size: 13px; color: var(--text-dim); margin-bottom: 20px;">It looks like you don't have any projects yet.</p>
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <button class="submit-btn" onclick="openCreateFromWelcome()">Create New Project</button>
+      <button class="basemap-btn" style="width: 100%; border: none;" onclick="closeWelcomeGenerateDemo()">Skip (Load Demo Data)</button>
+    </div>
+  </div>
+</div>
+
+<!-- CREATE PROJECT MODAL -->
+<div id="createProjectModal" class="modal-overlay hidden">
+  <div class="modal-content">
+    <h3>Create Project</h3>
+    <label style="font-size:12px;color:var(--text-dim);margin-bottom:4px;display:block;">Project Name</label>
+    <input type="text" id="newProjectName" placeholder="e.g. Nairobi">
+    
+    <label style="font-size:12px;color:var(--text-dim);margin-bottom:4px;display:block;margin-top:8px;">CSV File</label>
+    <input type="file" id="newProjectCsv" accept=".csv" style="padding: 4px; border: none; background: transparent; margin-bottom: 16px;">
+    <small style="display:block; color:#555; margin-top:-10px; margin-bottom:16px; font-size:11px;">Expects: PLOTID, LAT, LON (optional: class_code, class_label)</small>
+
+    <div class="modal-actions">
+      <button class="basemap-btn" onclick="closeCreateProjectModal()">Cancel</button>
+      <button class="submit-btn" style="padding:6px 12px; font-size:12px; width:auto;" onclick="createNewProject()">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- SETTINGS MODAL -->
+<div id="settingsModal" class="modal-overlay hidden">
+  <div class="modal-content">
+    <h3>Settings</h3>
+    <label style="font-size:12px;color:var(--text-dim);margin-bottom:4px;display:block;">Planet API Key</label>
+    <input type="text" id="planetApiKey" placeholder="Enter API key...">
+    <div class="modal-actions">
+      <button class="basemap-btn" onclick="closeSettings()">Cancel</button>
+      <button class="submit-btn" style="padding:6px 12px; font-size:12px; width:auto;" onclick="saveSettings()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- LEFT SIDEBAR -->
+<div class="sidebar">
+  <div class="sidebar-header" style="display: flex; justify-content: space-between; align-items: flex-start;">
+    <div>
+      <h1>EarthLabel</h1>
+      <div class="subtitle">Land Cover Classification 2024</div>
+    </div>
+    <button class="basemap-btn" style="padding: 4px 8px; border: none; background: transparent;" onclick="openSettings()" title="Settings">⚙️</button>
+  </div>
+
+  <div id="sidebar-projects-view" style="display: flex; flex-direction: column; flex: 1; overflow: hidden;">
+    <div style="padding: 12px 20px; border-bottom: 1px solid var(--panel-border); display: flex; justify-content: space-between; align-items: center;">
+      <div style="display: flex; gap: 8px;">
+        <button class="filter-btn active" id="sort-recent" onclick="setProjectSort('recent')">Recent</button>
+        <button class="filter-btn" id="sort-name" onclick="setProjectSort('name')">Name</button>
+      </div>
+      <div style="display: flex; gap: 8px;">
+        <button class="basemap-btn" style="padding: 4px 8px;" onclick="openCreateProjectModal()" title="New Project">➕ New</button>
+      </div>
+    </div>
+    <div class="plot-list" id="projectListContainer" style="flex: 1; overflow-y: auto;">
+      <!-- project items here -->
+    </div>
+  </div>
+
+  <div id="sidebar-plots-view" style="display: none; flex-direction: column; flex: 1; overflow: hidden;">
+    <div style="padding: 10px 20px; border-bottom: 1px solid var(--panel-border); background: rgba(0,0,0,0.2); display: flex; align-items: center; justify-content: space-between;">
+      <button class="basemap-btn" style="border: none; padding: 0; display: flex; align-items: center; gap: 4px;" onclick="showProjectListView()">Projects</button>
+      <button class="basemap-btn" style="padding: 4px 8px; color: var(--danger); border-color: var(--danger);" onclick="deleteCurrentProject()" title="Delete Project">🗑️</button>
+    </div>
+    
+    <div style="padding: 16px 20px; border-bottom: 1px solid var(--panel-border);">
+      <h2 id="activeProjectName" style="font-size: 16px; font-weight: 700;">Project Name</h2>
+    </div>
+
+    <div class="progress-bar">
+      <div class="progress-track"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+      <div class="progress-text" id="progressText">0 / 0</div>
+    </div>
+
+    <div class="filter-section">
+      <button class="filter-btn active" onclick="filterPlots('all')">All</button>
+      <button class="filter-btn" onclick="filterPlots('pending')">Pending</button>
+      <button class="filter-btn" onclick="filterPlots('done')">Done</button>
+    </div>
+
+    <div class="plot-list" id="plotList"></div>
+  </div>
+</div>
+
+<!-- MAP -->
+<div class="main-area">
+  <div class="map-toolbar">
+    <button class="basemap-btn" onclick="toggleSplitView()" id="btn-split">◫ Split View</button>
+    <div class="toolbar-separator"></div>
+    <div class="global-basemaps" style="display:flex; gap:8px; align-items:center;">
+      <button class="basemap-btn active" onclick="switchBasemap('google')" id="btn-google">Google</button>
+      <button class="basemap-btn" onclick="switchBasemap('esri')" id="btn-esri">ESRI</button>
+      <button class="basemap-btn" onclick="switchBasemap('bing')" id="btn-bing">Bing</button>
+      <button class="basemap-btn" onclick="switchBasemap('sentinel2')" id="btn-sentinel2">Sentinel-2</button>
+      <select id="s2-year" class="basemap-btn" style="display:none;" onchange="updateSentinel2Year()">
+        <option value="2018">2018</option>
+        <option value="2019">2019</option>
+        <option value="2020">2020</option>
+        <option value="2021">2021</option>
+        <option value="2022">2022</option>
+        <option value="2023">2023</option>
+        <option value="2024" selected>2024</option>
+      </select>
+      <button class="basemap-btn" onclick="switchBasemap('planet')" id="btn-planet">Planet</button>
+      <select id="planet-year" class="basemap-btn" style="display:none;" onchange="updatePlanetParams()">
+        <option value="2016">2016</option><option value="2017">2017</option><option value="2018">2018</option>
+        <option value="2019">2019</option><option value="2020">2020</option><option value="2021">2021</option>
+        <option value="2022">2022</option><option value="2023">2023</option><option value="2024" selected>2024</option>
+        <option value="2025">2025</option>
+      </select>
+      <select id="planet-month" class="basemap-btn" style="display:none;" onchange="updatePlanetParams()">
+        <option value="01">01</option><option value="02">02</option><option value="03">03</option><option value="04">04</option><option value="05">05</option><option value="06" selected>06</option><option value="07">07</option><option value="08">08</option><option value="09">09</option><option value="10">10</option><option value="11">11</option><option value="12">12</option>
+      </select>
+      <div class="toolbar-separator"></div>
+    </div>
+    <button class="nav-btn prev" onclick="prevPlot()">← Prev</button>
+    <button class="nav-btn next" onclick="nextPlot()">Next →</button>
+    <button class="nav-btn" onclick="openGoogleEarth()" id="btn-ge" disabled style="background: #2a2d3a; color: var(--text);">🌍 Google Earth</button>
+    <div class="plot-counter" id="plotCounter">–</div>
+  </div>
+  <div id="map-wrapper">
+    <div class="map-pane" id="pane-left">
+      <div class="mini-basemap-selector" id="mini-basemaps-left" style="display:none;">
+        <button class="mini-btn-google active" onclick="setMapLayer('left', 'google')">Google</button>
+        <button class="mini-btn-esri" onclick="setMapLayer('left', 'esri')">ESRI</button>
+        <button class="mini-btn-bing" onclick="setMapLayer('left', 'bing')">Bing</button>
+        <button class="mini-btn-sentinel2" onclick="setMapLayer('left', 'sentinel2')">Sentinel-2</button>
+        <select id="s2-year-left" style="display:none;" onchange="setMapLayer('left', 'sentinel2')">
+          <option value="2018">2018</option><option value="2019">2019</option><option value="2020">2020</option><option value="2021">2021</option><option value="2022">2022</option><option value="2023">2023</option><option value="2024" selected>2024</option>
+        </select>
+        <button class="mini-btn-planet" onclick="setMapLayer('left', 'planet')">Planet</button>
+        <select id="planet-year-left" style="display:none;" onchange="setMapLayer('left', 'planet')">
+          <option value="2016">2016</option><option value="2017">2017</option><option value="2018">2018</option><option value="2019">2019</option><option value="2020">2020</option><option value="2021">2021</option><option value="2022">2022</option><option value="2023">2023</option><option value="2024" selected>2024</option><option value="2025">2025</option>
+        </select>
+        <select id="planet-month-left" style="display:none;" onchange="setMapLayer('left', 'planet')">
+          <option value="01">01</option><option value="02">02</option><option value="03">03</option><option value="04">04</option><option value="05">05</option><option value="06" selected>06</option><option value="07">07</option><option value="08">08</option><option value="09">09</option><option value="10">10</option><option value="11">11</option><option value="12">12</option>
+        </select>
+      </div>
+      <div id="map" class="inner-map"></div>
+      <div class="coord-info" id="coordInfo">Click a plot to begin</div>
+    </div>
+    <div class="map-pane split-hidden" id="pane-right">
+      <div class="mini-basemap-selector" id="mini-basemaps-right">
+        <button class="mini-btn-google" onclick="setMapLayer('right', 'google')">Google</button>
+        <button class="mini-btn-esri" onclick="setMapLayer('right', 'esri')">ESRI</button>
+        <button class="mini-btn-bing" onclick="setMapLayer('right', 'bing')">Bing</button>
+        <button class="mini-btn-sentinel2 active" onclick="setMapLayer('right', 'sentinel2')">Sentinel-2</button>
+        <select id="s2-year-right" style="display:inline-block;" onchange="setMapLayer('right', 'sentinel2')">
+          <option value="2018">2018</option><option value="2019">2019</option><option value="2020">2020</option><option value="2021">2021</option><option value="2022">2022</option><option value="2023">2023</option><option value="2024" selected>2024</option>
+        </select>
+        <button class="mini-btn-planet" onclick="setMapLayer('right', 'planet')">Planet</button>
+        <select id="planet-year-right" style="display:none;" onchange="setMapLayer('right', 'planet')">
+          <option value="2016">2016</option><option value="2017">2017</option><option value="2018">2018</option><option value="2019">2019</option><option value="2020">2020</option><option value="2021">2021</option><option value="2022">2022</option><option value="2023">2023</option><option value="2024" selected>2024</option><option value="2025">2025</option>
+        </select>
+        <select id="planet-month-right" style="display:none;" onchange="setMapLayer('right', 'planet')">
+          <option value="01">01</option><option value="02">02</option><option value="03">03</option><option value="04">04</option><option value="05">05</option><option value="06" selected>06</option><option value="07">07</option><option value="08">08</option><option value="09">09</option><option value="10">10</option><option value="11">11</option><option value="12">12</option>
+        </select>
+      </div>
+      <div id="mapRight" class="inner-map"></div>
+      <div class="coord-info" id="coordInfoRight">Right Map</div>
+    </div>
+  </div>
+</div>
+
+<!-- RIGHT PANEL -->
+<div class="classify-panel">
+  <div class="classify-header">
+    <h2>Classify This Plot</h2>
+    <div class="molca-2019" id="molcaRef">Reference: <span>–</span></div>
+  </div>
+
+  <div class="class-list" id="classList"></div>
+
+  <div class="confidence-section">
+    <label>Confidence</label>
+    <div class="confidence-row">
+      <button class="conf-btn" onclick="setConfidence('High')">High</button>
+      <button class="conf-btn" onclick="setConfidence('Medium')">Medium</button>
+      <button class="conf-btn" onclick="setConfidence('Low')">Low</button>
+    </div>
+  </div>
+
+  <div class="notes-section">
+    <textarea id="notesInput" placeholder="Optional notes..."></textarea>
+  </div>
+
+  <div class="submit-section">
+    <button class="submit-btn" id="submitBtn" onclick="submitClassification()" disabled>Submit & Next →</button>
+    <button class="export-btn" onclick="exportCSV()">📥 Export Results CSV</button>
+  </div>
+</div>
+
+<script>
+// ========== DB & PROJECTS ==========
+const DB_NAME = 'molca_validator_db';
+const DB_VERSION = 1;
+const STORE_NAME = 'projects';
+let db;
+let currentProject = null;
+let projectSort = 'recent';
+
+function initDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = e => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+      }
+    };
+    req.onsuccess = e => { db = e.target.result; resolve(); };
+    req.onerror = e => reject(e.target.error);
+  });
+}
+
+function getAllProjects() {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const req = tx.objectStore(STORE_NAME).getAll();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = e => reject(e.target.error);
+  });
+}
+
+function saveProjectDB(proj) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const req = tx.objectStore(STORE_NAME).put(proj);
+    req.onsuccess = () => resolve();
+    req.onerror = e => reject(e.target.error);
+  });
+}
+
+function deleteProjectDB(id) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const req = tx.objectStore(STORE_NAME).delete(id);
+    req.onsuccess = () => resolve();
+    req.onerror = e => reject(e.target.error);
+  });
+}
+
+async function appInit() {
+  await initDB();
+  const projs = await getAllProjects();
+  if (projs.length === 0) {
+    document.getElementById('welcomeOverlay').classList.remove('hidden');
+    showProjectListView();
+  } else {
+    let lastId = localStorage.getItem('lastProjectId');
+    let toLoad = projs.find(p => p.id === lastId);
+    if (toLoad) {
+      await loadProject(toLoad.id);
+    } else {
+      showProjectListView();
+    }
+  }
+}
+
+async function refreshProjectDropdown() {
+  // Re-purposed to render folder-style project list
+  const projs = await getAllProjects();
+  if (projectSort === 'recent') {
+    projs.sort((a,b) => new Date(b.lastUsed) - new Date(a.lastUsed));
+  } else {
+    projs.sort((a,b) => a.name.localeCompare(b.name));
+  }
+  
+  const container = document.getElementById('projectListContainer');
+  container.innerHTML = '';
+  
+  if(projs.length === 0) {
+    container.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-dim); font-size: 13px;">No projects found.</div>';
+    return;
+  }
+  
+  projs.forEach(p => {
+    const done = p.plots.filter(x => x.completed).length;
+    const total = p.plots.length;
+    
+    const div = document.createElement('div');
+    div.className = 'plot-item';
+    div.onclick = () => switchProject(p.id);
+    div.innerHTML = `
+      <div class="plot-info">
+        <div class="plot-id" style="font-size: 14px; font-family: 'DM Sans', sans-serif;">${p.name}</div>
+        <div class="plot-label">${done} / ${total} plots completed</div>
+      </div>
+    `;
+    container.appendChild(div);
+  });
+}
+
+function setProjectSort(type) {
+  projectSort = type;
+  document.getElementById('sort-recent').classList.toggle('active', type === 'recent');
+  document.getElementById('sort-name').classList.toggle('active', type === 'name');
+  refreshProjectDropdown();
+}
+
+function showProjectListView() {
+  document.getElementById('sidebar-projects-view').style.display = 'flex';
+  document.getElementById('sidebar-plots-view').style.display = 'none';
+  refreshProjectDropdown();
+}
+
+function showPlotListView() {
+  document.getElementById('sidebar-projects-view').style.display = 'none';
+  document.getElementById('sidebar-plots-view').style.display = 'flex';
+}
+
+async function switchProject(id) {
+  if(!id) return;
+  await loadProject(id);
+}
+
+async function loadProject(id) {
+  const projs = await getAllProjects();
+  const p = projs.find(x => x.id === id);
+  if(!p) return;
+  
+  p.lastUsed = new Date().toISOString();
+  await saveProjectDB(p);
+  localStorage.setItem('lastProjectId', id);
+  
+  currentProject = p;
+  plots = p.plots;
+  
+  document.getElementById('activeProjectName').textContent = p.name;
+  
+  // reset ui
+  currentSelection = null;
+  currentConfidence = null;
+  document.getElementById('notesInput').value = '';
+  document.querySelectorAll('.conf-btn').forEach(b => b.classList.remove('selected'));
+  renderClassButtons();
+  renderPlotList();
+  updateProgress();
+  
+  isFirstPlotLoad = true;
+  
+  if(plots.length > 0) {
+    // find first pending
+    let idx = plots.findIndex(pl => !pl.completed);
+    if(idx === -1) idx = 0;
+    goToPlot(idx);
+  } else {
+    // clear maps
+    if (marker) map.removeLayer(marker);
+    if (circle) map.removeLayer(circle);
+    if (markerRight) mapRight.removeLayer(markerRight);
+    if (circleRight) mapRight.removeLayer(circleRight);
+    document.getElementById('molcaRef').innerHTML = `Reference: <span>–</span>`;
+    document.getElementById('plotCounter').textContent = `–`;
+    document.getElementById('btn-ge').disabled = true;
+  }
+  
+  showPlotListView();
+}
+
+function openCreateFromWelcome() {
+  document.getElementById('welcomeOverlay').classList.add('hidden');
+  document.getElementById('createProjectModal').classList.remove('hidden');
+}
+
+function closeWelcomeGenerateDemo() {
+  document.getElementById('welcomeOverlay').classList.add('hidden');
+  loadDemoData();
+}
+
+function openCreateProjectModal() {
+  document.getElementById('newProjectName').value = '';
+  document.getElementById('newProjectCsv').value = '';
+  document.getElementById('createProjectModal').classList.remove('hidden');
+}
+
+function closeCreateProjectModal() {
+  document.getElementById('createProjectModal').classList.add('hidden');
+  if(!currentProject && plots.length === 0) {
+    // if closed without creating and nothing loaded, show demo
+    loadDemoData(); 
+  }
+}
+
+async function createNewProject() {
+  const name = document.getElementById('newProjectName').value.trim();
+  const fileInput = document.getElementById('newProjectCsv');
+  if(!name) return alert('Enter a project name');
+  if(!fileInput.files.length) return alert('Select a CSV file');
+  
+  const file = fileInput.files[0];
+  const reader = new FileReader();
+  reader.onload = async function(e) {
+    const text = e.target.result;
+    const lines = text.trim().split('\n');
+    const headers = lines[0].split(',').map(h => h.trim().replace(/\r/g, ''));
+    
+    let newPlots = [];
+    for (let i = 1; i < lines.length; i++) {
+        const vals = lines[i].split(',').map(v => v.trim().replace(/\r/g, ''));
+        if (vals.length < 5 || !vals[1] || !vals[2]) continue;
+
+        const idIdx = headers.indexOf('PLOTID') > -1 ? headers.indexOf('PLOTID') : 0;
+        const latIdx = headers.indexOf('LAT') > -1 ? headers.indexOf('LAT') : 1;
+        const lonIdx = headers.indexOf('LON') > -1 ? headers.indexOf('LON') : 2;
+        const classIdx = headers.indexOf('molca_class') > -1 ? headers.indexOf('molca_class') : 3;
+        const labelIdx = headers.indexOf('molca_label') > -1 ? headers.indexOf('molca_label') : 4;
+
+        newPlots.push({
+            id: vals[idIdx],
+            lat: parseFloat(vals[latIdx]),
+            lon: parseFloat(vals[lonIdx]),
+            molca_class: vals[classIdx],
+            molca_label: vals[labelIdx],
+            result_class: null,
+            result_label: null,
+            confidence: null,
+            notes: '',
+            completed: false
+        });
+    }
+    
+    const proj = {
+      id: 'proj_' + Date.now() + '_' + Math.floor(Math.random()*1000),
+      name: name,
+      created: new Date().toISOString(),
+      lastUsed: new Date().toISOString(),
+      plots: newPlots
+    };
+    
+    await saveProjectDB(proj);
+    closeCreateProjectModal();
+    await loadProject(proj.id);
+  };
+  reader.readAsText(file);
+}
+
+async function deleteCurrentProject() {
+  if(!currentProject) return;
+  if(confirm(`Delete project ${currentProject.name}? This cannot be undone.`)) {
+    await deleteProjectDB(currentProject.id);
+    currentProject = null;
+    plots = [];
+    localStorage.removeItem('lastProjectId');
+    
+    const projs = await getAllProjects();
+    if(projs.length > 0) {
+      showProjectListView();
+    } else {
+      showProjectListView();
+      document.getElementById('welcomeOverlay').classList.remove('hidden');
+    }
+  }
+}
+
+// ========== DATA ==========
+function openSettings() {
+  document.getElementById('planetApiKey').value = localStorage.getItem('molca_planet_api_key') || '';
+  document.getElementById('settingsModal').classList.remove('hidden');
+}
+
+function closeSettings() {
+  document.getElementById('settingsModal').classList.add('hidden');
+}
+
+function saveSettings() {
+  localStorage.setItem('molca_planet_api_key', document.getElementById('planetApiKey').value);
+  closeSettings();
+  if (leftName === 'planet') setMapLayer('left', 'planet');
+  if (rightName === 'planet') setMapLayer('right', 'planet');
+}
+
+const MOLCA_CLASSES = [
+  { code: 20, label: 'Forest', color: '#548235', key: '1' },
+  { code: 5,  label: 'Shrubland', color: '#c6e0b4', key: '2' },
+  { code: 7,  label: 'Grassland', color: '#66ff33', key: '3' },
+  { code: 8,  label: 'Cropland', color: '#ffc000', key: '4' },
+  { code: 9,  label: 'Wetland', color: '#9bc2e6', key: '5' },
+  { code: 10, label: 'Lichens and Mosses', color: '#ededed', key: '6' },
+  { code: 12, label: 'Bareland', color: '#bf8f00', key: '7' },
+  { code: 13, label: 'Built-up', color: '#ff0000', key: '8' },
+  { code: 15, label: 'Water', color: '#1f4e78', key: '9' },
+  { code: 16, label: 'Permanent ice and snow', color: '#ffffff', key: '0' },
+];
+
+let plots = [];
+let currentIndex = -1;
+let googleEarthActive = false;
+let geWindowRef = null;
+let currentSelection = null;
+let currentConfidence = null;
+let currentFilter = 'all';
+
+let isSplitMode = false;
+let map, marker, circle;
+let mapRight, markerRight, circleRight;
+let currentLayerLeft, currentLayerRight;
+let leftName = 'google';
+let rightName = 'sentinel2';
+
+// Custom Bing layer with quadkey support
+const BingLayer = L.TileLayer.extend({
+  getTileUrl: function(coords) {
+    const zoom = this._getZoomForUrl();
+    let quadkey = '';
+    for (let i = zoom; i > 0; i--) {
+      let digit = 0;
+      const mask = 1 << (i - 1);
+      if ((coords.x & mask) !== 0) digit++;
+      if ((coords.y & mask) !== 0) digit += 2;
+      quadkey += digit;
+    }
+    return `https://ecn.t0.tiles.virtualearth.net/tiles/a${quadkey}.jpeg?g=587`;
+  }
+});
+
+function getTileLayer(name, extraParam1, extraParam2) {
+  if (name === 'google') return L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', { maxZoom: 21, attribution: '© Google' });
+  if (name === 'esri') return L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: '© ESRI' });
+  if (name === 'bing') return new BingLayer('', { maxZoom: 19, attribution: '© Microsoft Bing' });
+  if (name === 'sentinel2') return L.tileLayer('https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-' + extraParam1 + '_3857/default/g/{z}/{y}/{x}.jpg', { maxZoom: 19, attribution: 'Sentinel-2 cloudless' });
+  if (name === 'planet') {
+    const apiKey = localStorage.getItem('molca_planet_api_key');
+    if (!apiKey) {
+      alert('Please set your Planet API key in ⚙️ Settings');
+      return L.tileLayer('', { maxZoom: 18 });
+    }
+    const year = extraParam1 || '2024';
+    const month = extraParam2 || '06';
+    const url = `https://tiles.planet.com/basemaps/v1/planet-tiles/global_monthly_${year}_${month}_mosaic/gmap/{z}/{x}/{y}.png?api_key=${apiKey}`;
+    return L.tileLayer(url, { maxZoom: 18, attribution: '© Planet Labs PBC' });
+  }
+}
+
+// ========== INIT MAP ==========
+function initMap() {
+  map = L.map('map', { center: [5, 20], zoom: 4, zoomControl: true });
+  currentLayerLeft = getTileLayer('google', '2024').addTo(map);
+
+  mapRight = L.map('mapRight', { center: [5, 20], zoom: 4, zoomControl: true });
+  currentLayerRight = getTileLayer('sentinel2', '2024').addTo(mapRight);
+
+  // Syncing logic
+  map.on('move', () => { if (isSplitMode && !mapRight._isSyncing) syncMaps(map, mapRight); });
+  map.on('zoom', () => { if (isSplitMode && !mapRight._isSyncing) syncMaps(map, mapRight); });
+  mapRight.on('move', () => { if (isSplitMode && !map._isSyncing) syncMaps(mapRight, map); });
+  mapRight.on('zoom', () => { if (isSplitMode && !map._isSyncing) syncMaps(mapRight, map); });
+
+  map.on('mousemove', (e) => {
+    document.getElementById('coordInfo').textContent = `${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)} | Zoom: ${map.getZoom()}`;
+    if (isSplitMode) document.getElementById('coordInfoRight').textContent = `${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)} | Zoom: ${mapRight.getZoom()}`;
+  });
+  mapRight.on('mousemove', (e) => {
+    document.getElementById('coordInfoRight').textContent = `${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)} | Zoom: ${mapRight.getZoom()}`;
+    document.getElementById('coordInfo').textContent = `${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)} | Zoom: ${map.getZoom()}`;
+  });
+}
+
+function syncMaps(source, target) {
+  target._isSyncing = true;
+  target.setView(source.getCenter(), source.getZoom(), { animate: false });
+  target._isSyncing = false;
+}
+
+function setMapLayer(side, name) {
+  const isLeft = side === 'left';
+  const m = isLeft ? map : mapRight;
+  const oldLayer = isLeft ? currentLayerLeft : currentLayerRight;
+  const yearSelect = document.getElementById(isLeft ? 's2-year-left' : 's2-year-right');
+  const pYearSelect = document.getElementById(isLeft ? 'planet-year-left' : 'planet-year-right');
+  const pMonthSelect = document.getElementById(isLeft ? 'planet-month-left' : 'planet-month-right');
+  
+  if (isLeft) leftName = name; else rightName = name;
+  
+  m.removeLayer(oldLayer);
+  
+  let newLayer;
+  if (name === 'planet') {
+    newLayer = getTileLayer('planet', pYearSelect.value, pMonthSelect.value);
+  } else if (name === 'sentinel2') {
+    newLayer = getTileLayer('sentinel2', yearSelect.value);
+  } else {
+    newLayer = getTileLayer(name);
+  }
+  newLayer.addTo(m);
+  
+  if (isLeft) currentLayerLeft = newLayer; else currentLayerRight = newLayer;
+
+  // UI update for mini-basemaps
+  const pane = document.getElementById(isLeft ? 'mini-basemaps-left' : 'mini-basemaps-right');
+  pane.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+  const btn = pane.querySelector(`.mini-btn-${name}`);
+  if(btn) btn.classList.add('active');
+  
+  yearSelect.style.display = (name === 'sentinel2') ? 'inline-block' : 'none';
+  pYearSelect.style.display = (name === 'planet') ? 'inline-block' : 'none';
+  pMonthSelect.style.display = (name === 'planet') ? 'inline-block' : 'none';
+  
+  // Sync global toolbar if it's the left map
+  if (isLeft && !isSplitMode) {
+    document.querySelectorAll('.global-basemaps .basemap-btn').forEach(b => {
+      if (b.tagName === 'BUTTON') b.classList.remove('active');
+    });
+    const gb = document.getElementById('btn-' + name);
+    if(gb) gb.classList.add('active');
+    document.getElementById('s2-year').style.display = (name === 'sentinel2') ? 'inline-block' : 'none';
+    document.getElementById('planet-year').style.display = (name === 'planet') ? 'inline-block' : 'none';
+    document.getElementById('planet-month').style.display = (name === 'planet') ? 'inline-block' : 'none';
+  }
+}
+
+function toggleSplitView() {
+  isSplitMode = !isSplitMode;
+  document.getElementById('pane-right').classList.toggle('split-hidden', !isSplitMode);
+  document.getElementById('btn-split').classList.toggle('active', isSplitMode);
+  document.body.classList.toggle('split-mode', isSplitMode);
+  
+  document.getElementById('mini-basemaps-left').style.display = isSplitMode ? 'flex' : 'none';
+
+  map.invalidateSize();
+  mapRight.invalidateSize();
+  
+  if (isSplitMode) {
+      syncMaps(map, mapRight);
+      if(plots[currentIndex]) {
+          mapRight.setView([plots[currentIndex].lat, plots[currentIndex].lon], map.getZoom(), {animate: false});
+      }
+  }
+}
+
+function switchBasemap(name) {
+  setMapLayer('left', name);
+}
+
+function updateSentinel2Year() {
+  document.getElementById('s2-year-left').value = document.getElementById('s2-year').value;
+  setMapLayer('left', leftName);
+}
+
+function updatePlanetParams() {
+  document.getElementById('planet-year-left').value = document.getElementById('planet-year').value;
+  document.getElementById('planet-month-left').value = document.getElementById('planet-month').value;
+  setMapLayer('left', leftName);
+}
+
+// ========== CSV LOADING ==========
+function loadCSV(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const text = e.target.result;
+    const lines = text.trim().split('\n');
+    const headers = lines[0].split(',').map(h => h.trim().replace(/\r/g, ''));
+
+    plots = [];
+    for (let i = 1; i < lines.length; i++) {
+      const vals = lines[i].split(',').map(v => v.trim().replace(/\r/g, ''));
+      if (vals.length < 5 || !vals[1] || !vals[2]) continue;
+
+      const idIdx = headers.indexOf('PLOTID');
+      const latIdx = headers.indexOf('LAT');
+      const lonIdx = headers.indexOf('LON');
+      const classIdx = headers.indexOf('molca_class');
+      const labelIdx = headers.indexOf('molca_label');
+
+      plots.push({
+        id: vals[idIdx] || vals[0],
+        lat: parseFloat(vals[latIdx] || vals[1]),
+        lon: parseFloat(vals[lonIdx] || vals[2]),
+        molca_class: vals[classIdx] || vals[3],
+        molca_label: vals[labelIdx] || vals[4],
+        result_class: null,
+        result_label: null,
+        confidence: null,
+        notes: '',
+        completed: false
+      });
+    }
+
+    document.getElementById('uploadSection').style.display = 'none';
+    renderPlotList();
+    updateProgress();
+
+    if (plots.length > 0) goToPlot(0);
+  };
+  reader.readAsText(file);
+}
+
+// Load the demo data
+function loadDemoData() {
+  const demoCSV = `PLOTID,LAT,LON,molca_class,molca_label
+1,0.585629478654684,27.740037816101086,20,Forest
+4,7.561730401794546,13.77573702220254,5,Shrubland
+5,7.23220423251199,17.57939106000711,5,Shrubland
+549,14.360124970056434,40.269817468683925,12,Bareland
+694,2.357369296081496,22.826971658790363,9,Wetland
+695,14.028660981932545,9.587140063718518,15,Water
+1100,1.521381635666559,9.654389206761676,20,Forest
+1120,1.809376465072769,9.766594060696304,7,Grassland
+1121,1.771180051514695,9.761415962802,12,Bareland
+1140,1.005347567192056,9.583776634747142,13,Built-up`;
+
+  const lines = demoCSV.trim().split('\n');
+  plots = [];
+  for (let i = 1; i < lines.length; i++) {
+    const v = lines[i].split(',');
+    plots.push({
+      id: v[0], lat: parseFloat(v[1]), lon: parseFloat(v[2]),
+      molca_class: v[3], molca_label: v[4],
+      result_class: null, result_label: null,
+      confidence: null, notes: '', completed: false
+    });
+  }
+  document.getElementById('uploadSection').innerHTML =
+    '<div style="padding:8px;font-size:11px;color:var(--text-dim)">10 demo points loaded. Upload CSV for full data.</div>';
+  renderPlotList();
+  updateProgress();
+  goToPlot(0);
+}
+
+// ========== RENDER ==========
+function renderPlotList() {
+  const list = document.getElementById('plotList');
+  list.innerHTML = '';
+
+  const filtered = plots.map((p, i) => ({...p, idx: i})).filter(p => {
+    if (currentFilter === 'pending') return !p.completed;
+    if (currentFilter === 'done') return p.completed;
+    return true;
+  });
+
+  filtered.forEach(p => {
+    const mc = MOLCA_CLASSES.find(c => c.code == p.molca_class);
+    const div = document.createElement('div');
+    div.className = `plot-item ${p.idx === currentIndex ? 'active' : ''} ${p.completed ? 'completed' : ''}`;
+    div.onclick = () => goToPlot(p.idx);
+    div.innerHTML = `
+      <div class="plot-status ${p.completed ? 'done' : 'pending'}"></div>
+      <div class="plot-info">
+        <div class="plot-id">Plot #${p.id}</div>
+        <div class="plot-label">${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}</div>
+      </div>
+      <span class="plot-molca-badge" style="background:${mc ? mc.color : '#666'}">${p.molca_label}</span>
+    `;
+    list.appendChild(div);
+  });
+}
+
+function renderClassButtons() {
+  const list = document.getElementById('classList');
+  list.innerHTML = '';
+  MOLCA_CLASSES.forEach(cls => {
+    const btn = document.createElement('button');
+    btn.className = `class-btn ${currentSelection === cls.code ? 'selected' : ''}`;
+    btn.onclick = () => selectClass(cls.code, cls.label);
+    btn.innerHTML = `
+      <div class="class-swatch" style="background:${cls.color}"></div>
+      ${cls.label}
+      <span class="class-key">${cls.key}</span>
+    `;
+    list.appendChild(btn);
+  });
+}
+
+// ========== NAVIGATION ==========
+let isFirstPlotLoad = true;
+
+function goToPlot(index) {
+  if (index < 0 || index >= plots.length) return;
+  currentIndex = index;
+  const p = plots[index];
+
+  // Fly to location, preserving zoom
+  const currentZoom = isFirstPlotLoad ? 17 : map.getZoom();
+  map.setView([p.lat, p.lon], currentZoom);
+  
+  if (isSplitMode) {
+    const currentZoomRight = isFirstPlotLoad ? 17 : mapRight.getZoom();
+    mapRight.setView([p.lat, p.lon], currentZoomRight, {animate: false});
+  }
+  
+  isFirstPlotLoad = false;
+
+  // Update KML server for Google Earth Pro
+  fetch('http://localhost:8765/update', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      lat: p.lat,
+      lon: p.lon,
+      id: p.id,
+      label: p.molca_label
+    })
+  }).catch(() => {}); // Silently fail if server not running
+
+  // Marker
+  if (marker) map.removeLayer(marker);
+  if (circle) map.removeLayer(circle);
+  if (markerRight) mapRight.removeLayer(markerRight);
+  if (circleRight) mapRight.removeLayer(circleRight);
+
+  marker = L.circleMarker([p.lat, p.lon], {
+    radius: 6, color: '#fff', weight: 2, fillColor: '#3b82f6',
+    fillOpacity: 0.9
+  }).addTo(map);
+
+  markerRight = L.circleMarker([p.lat, p.lon], {
+    radius: 6, color: '#fff', weight: 2, fillColor: '#3b82f6',
+    fillOpacity: 0.9
+  }).addTo(mapRight);
+
+  // 70m square (matching 7x7 plot at 10m spacing)
+  const side = 0.00035; // ~35m in degrees
+  circle = L.rectangle([
+    [p.lat - side, p.lon - side],
+    [p.lat + side, p.lon + side]
+  ], { color: '#f59e0b', weight: 2, fillOpacity: 0.05, dashArray: '5,5' }).addTo(map);
+
+  circleRight = L.rectangle([
+    [p.lat - side, p.lon - side],
+    [p.lat + side, p.lon + side]
+  ], { color: '#f59e0b', weight: 2, fillOpacity: 0.05, dashArray: '5,5' }).addTo(mapRight);
+
+  // Update UI
+  const mc = MOLCA_CLASSES.find(c => c.code == p.molca_class);
+  document.getElementById('molcaRef').innerHTML =
+    `Reference: <span style="color:${mc ? mc.color : '#fff'}">${p.molca_label} (${p.molca_class})</span>`;
+
+  // Restore previous selections if any
+  currentSelection = p.result_class;
+  currentConfidence = p.confidence;
+  document.getElementById('notesInput').value = p.notes || '';
+
+  renderClassButtons();
+  renderPlotList();
+  updateConfidenceUI();
+  updateSubmitBtn();
+  document.getElementById('btn-ge').disabled = false;
+
+  if (googleEarthActive) {
+    const geUrl = `https://earth.google.com/web/@${p.lat},${p.lon},0a,1000d,35y,0h,0t,0r`;
+    geWindowRef = window.open(geUrl, 'google_earth_window');
+    window.focus();
+  }
+
+  document.getElementById('plotCounter').textContent = `${index + 1} / ${plots.length}`;
+}
+
+function nextPlot() {
+  // Find next pending plot
+  for (let i = currentIndex + 1; i < plots.length; i++) {
+    if (!plots[i].completed) { goToPlot(i); return; }
+  }
+  // Wrap around
+  for (let i = 0; i < currentIndex; i++) {
+    if (!plots[i].completed) { goToPlot(i); return; }
+  }
+  // All done or go next anyway
+  if (currentIndex + 1 < plots.length) goToPlot(currentIndex + 1);
+}
+
+function prevPlot() {
+  if (currentIndex > 0) goToPlot(currentIndex - 1);
+}
+
+function openGoogleEarth() {
+  const btn = document.getElementById('btn-ge');
+  googleEarthActive = !googleEarthActive;
+  if (googleEarthActive) {
+    btn.textContent = '🌍 Google Earth ●';
+    btn.style.background = 'var(--accent)';
+    btn.style.color = '#fff';
+    if (currentIndex >= 0 && currentIndex < plots.length) {
+      const p = plots[currentIndex];
+      const url = `https://earth.google.com/web/@${p.lat},${p.lon},0a,1000d,35y,0h,0t,0r`;
+      geWindowRef = window.open(url, 'google_earth_window');
+      window.focus();
+    }
+  } else {
+    btn.textContent = '🌍 Google Earth';
+    btn.style.background = '#2a2d3a';
+    btn.style.color = 'var(--text)';
+  }
+}
+
+// ========== CLASSIFICATION ==========
+function selectClass(code, label) {
+  currentSelection = code;
+  renderClassButtons();
+  updateSubmitBtn();
+}
+
+function setConfidence(level) {
+  currentConfidence = level;
+  updateConfidenceUI();
+  updateSubmitBtn();
+}
+
+function updateConfidenceUI() {
+  document.querySelectorAll('.conf-btn').forEach(b => {
+    b.classList.toggle('selected', b.textContent === currentConfidence);
+  });
+}
+
+function updateSubmitBtn() {
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = !currentSelection;
+}
+
+function submitClassification() {
+  if (!currentSelection) return;
+
+  const p = plots[currentIndex];
+  const cls = MOLCA_CLASSES.find(c => c.code === currentSelection);
+  p.result_class = currentSelection;
+  p.result_label = cls ? cls.label : '';
+  p.confidence = currentConfidence;
+  p.notes = document.getElementById('notesInput').value;
+  p.completed = true;
+
+  // Save current project DB
+  if(currentProject) {
+    currentProject.plots = plots;
+    saveProjectDB(currentProject);
+  }
+
+  // Reset for next
+  currentSelection = null;
+  currentConfidence = null;
+  document.getElementById('notesInput').value = '';
+
+  updateProgress();
+  nextPlot();
+}
+
+function updateProgress() {
+  const done = plots.filter(p => p.completed).length;
+  const total = plots.length;
+  const pct = total > 0 ? (done / total * 100) : 0;
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('progressText').textContent = `${done} / ${total}`;
+}
+
+// ========== FILTER ==========
+function filterPlots(type) {
+  currentFilter = type;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  renderPlotList();
+}
+
+// ========== EXPORT ==========
+function exportCSV() {
+  if (plots.length === 0) return;
+  const pName = currentProject ? currentProject.name : 'demo';
+  let csv = 'project_name,PLOTID,LAT,LON,molca_class_2019,molca_label_2019,classified_class_2024,classified_label_2024,confidence,notes\n';
+  plots.forEach(p => {
+    csv += `"${pName}",${p.id},${p.lat},${p.lon},${p.molca_class},${p.molca_label},${p.result_class || ''},${p.result_label || ''},${p.confidence || ''},${(p.notes || '').replace(/,/g, ';')}\n`;
+  });
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const dlName = currentProject ? `${currentProject.name.toLowerCase().replace(/\s+/g, '_')}_validation_results.csv` : 'molca_validation_2024_results.csv';
+  a.download = dlName;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ========== KEYBOARD SHORTCUTS ==========
+document.addEventListener('keydown', (e) => {
+  // Number keys for class selection
+  const key = e.key;
+  const cls = MOLCA_CLASSES.find(c => c.key === key);
+  if (cls) { selectClass(cls.code, cls.label); return; }
+
+  if (e.key === 'ArrowRight' || e.key === 'n') nextPlot();
+  if (e.key === 'ArrowLeft' || e.key === 'p') prevPlot();
+  if (e.key === 'Enter' && !document.getElementById('submitBtn').disabled) submitClassification();
+  if (e.key === 'h') setConfidence('High');
+  if (e.key === 'm') setConfidence('Medium');
+  if (e.key === 'l') setConfidence('Low');
+});
+
+// ========== INIT ==========
+initMap();
+renderClassButtons();
+appInit();
+</script>
+</body>
+</html>
