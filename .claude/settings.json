@@ -1,7 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "PowerShell(git -C \"d:\\\\06_Polimi\\\\2025-2026\\\\Land Cover\\\\Validation\\\\earth-label\" remote -v 2>&1)"
-    ]
-  }
-}
