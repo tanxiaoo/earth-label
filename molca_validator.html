@@ -632,6 +632,11 @@
     <div class="global-basemaps" style="display:flex; gap:8px; align-items:center;">
       <button class="basemap-btn active" onclick="switchBasemap('google')" id="btn-google">Google</button>
       <button class="basemap-btn" onclick="switchBasemap('esri')" id="btn-esri">ESRI</button>
+      <select id="esri-year" class="basemap-btn" style="display:none;" onchange="updateEsriYear()">
+        <option value="latest" selected>Latest</option>
+        <option value="2024">2024</option>
+        <option value="2019">2019</option>
+      </select>
       <button class="basemap-btn" onclick="switchBasemap('bing')" id="btn-bing">Bing</button>
       <button class="basemap-btn" onclick="switchBasemap('sentinel2')" id="btn-sentinel2">Sentinel-2</button>
       <select id="s2-year" class="basemap-btn" style="display:none;" onchange="updateSentinel2Year()">
@@ -665,6 +670,11 @@
       <div class="mini-basemap-selector" id="mini-basemaps-left" style="display:none;">
         <button class="mini-btn-google active" onclick="setMapLayer('left', 'google')">Google</button>
         <button class="mini-btn-esri" onclick="setMapLayer('left', 'esri')">ESRI</button>
+        <select id="esri-year-left" style="display:none;" onchange="setMapLayer('left', 'esri')">
+          <option value="latest" selected>Latest</option>
+          <option value="2024">2024</option>
+          <option value="2019">2019</option>
+        </select>
         <button class="mini-btn-bing" onclick="setMapLayer('left', 'bing')">Bing</button>
         <button class="mini-btn-sentinel2" onclick="setMapLayer('left', 'sentinel2')">Sentinel-2</button>
         <select id="s2-year-left" style="display:none;" onchange="setMapLayer('left', 'sentinel2')">
@@ -685,6 +695,11 @@
       <div class="mini-basemap-selector" id="mini-basemaps-right">
         <button class="mini-btn-google" onclick="setMapLayer('right', 'google')">Google</button>
         <button class="mini-btn-esri" onclick="setMapLayer('right', 'esri')">ESRI</button>
+        <select id="esri-year-right" style="display:none;" onchange="setMapLayer('right', 'esri')">
+          <option value="latest" selected>Latest</option>
+          <option value="2024">2024</option>
+          <option value="2019">2019</option>
+        </select>
         <button class="mini-btn-bing" onclick="setMapLayer('right', 'bing')">Bing</button>
         <button class="mini-btn-sentinel2 active" onclick="setMapLayer('right', 'sentinel2')">Sentinel-2</button>
         <select id="s2-year-right" style="display:inline-block;" onchange="setMapLayer('right', 'sentinel2')">
@@ -1058,7 +1073,11 @@ const BingLayer = L.TileLayer.extend({
 
 function getTileLayer(name, extraParam1, extraParam2) {
   if (name === 'google') return L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', { maxZoom: 21, attribution: '© Google' });
-  if (name === 'esri') return L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: '© ESRI' });
+  if (name === 'esri') {
+    if (extraParam1 === '2024') return L.tileLayer('https://wayback.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/WMTS/1.0.0/default028mm/MapServer/tile/16453/{z}/{y}/{x}', { maxZoom: 19, attribution: '© Esri — World Imagery Wayback (Dec 2024)' });
+    if (extraParam1 === '2019') return L.tileLayer('https://wayback.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/WMTS/1.0.0/GoogleMapsCompatible/MapServer/tile/4756/{z}/{y}/{x}', { maxZoom: 19, attribution: '© Esri — World Imagery Wayback (Dec 2019)' });
+    return L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: '© Esri — World Imagery' });
+  }
   if (name === 'bing') return new BingLayer('', { maxZoom: 19, attribution: '© Microsoft Bing' });
   if (name === 'sentinel2') return L.tileLayer('https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-' + extraParam1 + '_3857/default/g/{z}/{y}/{x}.jpg', { maxZoom: 19, attribution: 'Sentinel-2 cloudless' });
   if (name === 'planet') {
@@ -1109,6 +1128,7 @@ function setMapLayer(side, name) {
   const m = isLeft ? map : mapRight;
   const oldLayer = isLeft ? currentLayerLeft : currentLayerRight;
   const yearSelect = document.getElementById(isLeft ? 's2-year-left' : 's2-year-right');
+  const esriYearSelect = document.getElementById(isLeft ? 'esri-year-left' : 'esri-year-right');
   const pYearSelect = document.getElementById(isLeft ? 'planet-year-left' : 'planet-year-right');
   const pMonthSelect = document.getElementById(isLeft ? 'planet-month-left' : 'planet-month-right');
   
@@ -1121,6 +1141,8 @@ function setMapLayer(side, name) {
     newLayer = getTileLayer('planet', pYearSelect.value, pMonthSelect.value);
   } else if (name === 'sentinel2') {
     newLayer = getTileLayer('sentinel2', yearSelect.value);
+  } else if (name === 'esri') {
+    newLayer = getTileLayer('esri', esriYearSelect.value);
   } else {
     newLayer = getTileLayer(name);
   }
@@ -1135,6 +1157,7 @@ function setMapLayer(side, name) {
   if(btn) btn.classList.add('active');
   
   yearSelect.style.display = (name === 'sentinel2') ? 'inline-block' : 'none';
+  esriYearSelect.style.display = (name === 'esri') ? 'inline-block' : 'none';
   pYearSelect.style.display = (name === 'planet') ? 'inline-block' : 'none';
   pMonthSelect.style.display = (name === 'planet') ? 'inline-block' : 'none';
   
@@ -1146,6 +1169,7 @@ function setMapLayer(side, name) {
     const gb = document.getElementById('btn-' + name);
     if(gb) gb.classList.add('active');
     document.getElementById('s2-year').style.display = (name === 'sentinel2') ? 'inline-block' : 'none';
+    document.getElementById('esri-year').style.display = (name === 'esri') ? 'inline-block' : 'none';
     document.getElementById('planet-year').style.display = (name === 'planet') ? 'inline-block' : 'none';
     document.getElementById('planet-month').style.display = (name === 'planet') ? 'inline-block' : 'none';
   }
@@ -1172,6 +1196,11 @@ function toggleSplitView() {
 
 function switchBasemap(name) {
   setMapLayer('left', name);
+}
+
+function updateEsriYear() {
+  document.getElementById('esri-year-left').value = document.getElementById('esri-year').value;
+  setMapLayer('left', leftName);
 }
 
 function updateSentinel2Year() {
