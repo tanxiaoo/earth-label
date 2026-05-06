@@ -2,3 +2,4 @@
 data/
 *.csv
 .env
+node_modules/

@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EarthLabel</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="stylesheet" href="/css/app.css" />
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════ MODALS ══════ -->
+
+<!-- WELCOME -->
+<div id="welcomeOverlay" class="modal-overlay hidden">
+  <div class="modal-content" style="text-align:center;max-width:360px;">
+    <div style="font-size:28px;margin-bottom:8px;">🌍</div>
+    <h3 style="margin-bottom:6px;">Welcome to EarthLabel</h3>
+    <p style="font-size:13px;color:var(--text-dim);margin-bottom:20px;">No projects yet. Create one or load demo data.</p>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <button class="submit-btn" onclick="app.openCreateProjectModal()">+ Create New Project</button>
+      <button class="basemap-btn" style="width:100%;padding:10px;" onclick="app.importProjectFile()">📂 Open Project File</button>
+      <button class="basemap-btn" style="width:100%;padding:10px;border:none;color:var(--text-dim);" onclick="app.loadDemoData()">Skip — Load Demo Data</button>
+    </div>
+  </div>
+</div>
+
+<!-- CREATE PROJECT -->
+<div id="createProjectModal" class="modal-overlay hidden">
+  <div class="modal-content" style="max-width:460px;width:90vw;">
+    <h3>Create Project</h3>
+
+    <label class="field-label">Project Name</label>
+    <input type="text" id="newProjectName" placeholder="e.g. Nairobi 2024" class="field-input">
+
+    <label class="field-label" style="margin-top:12px;">Plot File
+      <span class="hint">CSV · GeoJSON · KML · KMZ · Shapefile (.zip)</span>
+    </label>
+    <div id="dropZone" class="drop-zone" onclick="document.getElementById('newProjectFile').click()">
+      <div id="dropZoneLabel">Click to select or drag & drop</div>
+    </div>
+    <input type="file" id="newProjectFile" accept=".csv,.geojson,.json,.kml,.kmz,.zip" style="display:none">
+
+    <label class="field-label" style="margin-top:12px;">Classification Schema</label>
+    <select id="presetSelect" class="field-input" onchange="app.onPresetChange()">
+      <option value="">Loading presets…</option>
+    </select>
+    <div id="schemaPreview" class="schema-preview"></div>
+
+    <div id="createError" class="error-msg hidden"></div>
+
+    <div class="modal-actions" style="margin-top:16px;">
+      <button class="basemap-btn" onclick="app.closeCreateProjectModal()">Cancel</button>
+      <button class="submit-btn" style="padding:8px 20px;width:auto;" onclick="app.createNewProject()">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- SETTINGS -->
+<div id="settingsModal" class="modal-overlay hidden">
+  <div class="modal-content" style="max-width:400px;">
+    <h3>Settings</h3>
+    <p style="font-size:12px;color:var(--text-dim);margin-bottom:16px;">
+      API keys are stored in <code>.env</code> on the server — they never leave your machine.
+    </p>
+
+    <label class="field-label">Planet API Key
+      <span id="planetKeyStatus" class="key-status"></span>
+    </label>
+    <div style="display:flex;gap:8px;">
+      <input type="password" id="planetApiKey" placeholder="Enter key to update…" class="field-input" style="flex:1;">
+      <button class="basemap-btn" onclick="app.clearKey('planet')" title="Clear key">✕</button>
+    </div>
+
+    <label class="field-label" style="margin-top:12px;">ESRI / ArcGIS API Key
+      <span id="esriKeyStatus" class="key-status"></span>
+    </label>
+    <div style="display:flex;gap:8px;">
+      <input type="password" id="esriApiKey" placeholder="Enter key to update…" class="field-input" style="flex:1;">
+      <button class="basemap-btn" onclick="app.clearKey('esri')" title="Clear key">✕</button>
+    </div>
+
+    <div id="settingsMsg" class="error-msg hidden" style="margin-top:10px;"></div>
+
+    <div class="modal-actions" style="margin-top:16px;">
+      <button class="basemap-btn" onclick="app.closeSettings()">Cancel</button>
+      <button class="submit-btn" style="padding:8px 20px;width:auto;" onclick="app.saveSettings()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- CLASS EDITOR -->
+<div id="classEditorModal" class="modal-overlay hidden">
+  <div class="modal-content" style="max-width:560px;width:90vw;max-height:90vh;display:flex;flex-direction:column;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <h3 style="margin:0;">Edit Class Schema</h3>
+      <div style="display:flex;gap:8px;">
+        <button class="basemap-btn" style="font-size:11px;" onclick="app.exportClassSchema()">↓ Export CSV</button>
+        <button class="basemap-btn" style="font-size:11px;" onclick="document.getElementById('classSchemaImport').click()">↑ Import CSV</button>
+        <input type="file" id="classSchemaImport" accept=".csv" style="display:none" onchange="app.importClassSchema(event)">
+      </div>
+    </div>
+
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;">
+      <label style="font-size:12px;color:var(--text-dim);white-space:nowrap;">Load preset:</label>
+      <select id="editorPresetSelect" class="field-input" style="flex:1;" onchange="app.applyEditorPreset()">
+        <option value="">— select to overwrite —</option>
+      </select>
+    </div>
+
+    <div id="classEditorList" style="flex:1;overflow-y:auto;margin-bottom:12px;"></div>
+
+    <button class="basemap-btn" style="width:100%;padding:10px;border-style:dashed;" onclick="app.addEditorClass()">+ Add Class</button>
+
+    <div class="modal-actions" style="margin-top:12px;">
+      <button class="basemap-btn" onclick="app.closeClassEditor()">Cancel</button>
+      <button class="submit-btn" style="padding:8px 20px;width:auto;" onclick="app.saveClassSchema()">Save Schema</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════ LEFT SIDEBAR ══════ -->
+<div class="sidebar">
+  <div class="sidebar-header">
+    <div>
+      <h1>EarthLabel</h1>
+      <div class="subtitle">Land Cover Classification</div>
+    </div>
+    <button class="icon-btn" onclick="app.openSettings()" title="Settings">⚙</button>
+  </div>
+
+  <!-- PROJECT LIST VIEW -->
+  <div id="sidebar-projects-view" style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
+    <div class="sidebar-toolbar">
+      <div style="display:flex;gap:6px;">
+        <button class="filter-btn active" id="sort-recent" onclick="app.setProjectSort('recent')">Recent</button>
+        <button class="filter-btn" id="sort-name" onclick="app.setProjectSort('name')">A–Z</button>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button class="basemap-btn" style="padding:4px 10px;" onclick="app.importProjectFile()" title="Open project file">📂</button>
+        <button class="basemap-btn" style="padding:4px 10px;" onclick="app.openCreateProjectModal()">+ New</button>
+      </div>
+    </div>
+    <div class="plot-list" id="projectListContainer"></div>
+  </div>
+
+  <!-- PLOT LIST VIEW -->
+  <div id="sidebar-plots-view" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
+    <div class="sidebar-toolbar" style="justify-content:space-between;">
+      <button class="basemap-btn" style="border:none;padding:0;display:flex;align-items:center;gap:4px;font-size:12px;" onclick="app.showProjectListView()">← Projects</button>
+      <div style="display:flex;gap:6px;">
+        <button class="basemap-btn" style="padding:4px 10px;font-size:11px;" onclick="app.exportProjectFile()" title="Export project JSON">↓</button>
+        <button class="basemap-btn" style="padding:4px 10px;font-size:11px;color:var(--danger);border-color:var(--danger);" onclick="app.deleteCurrentProject()">🗑</button>
+      </div>
+    </div>
+
+    <div style="padding:12px 20px;border-bottom:1px solid var(--panel-border);">
+      <h2 id="activeProjectName" style="font-size:15px;font-weight:700;">—</h2>
+    </div>
+
+    <div class="progress-bar">
+      <div class="progress-track"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+      <div class="progress-text" id="progressText">0 / 0</div>
+    </div>
+
+    <div class="filter-section">
+      <button class="filter-btn active" id="filter-all"     onclick="app.filterPlots('all')">All</button>
+      <button class="filter-btn"        id="filter-pending" onclick="app.filterPlots('pending')">Pending</button>
+      <button class="filter-btn"        id="filter-done"    onclick="app.filterPlots('done')">Done</button>
+    </div>
+
+    <div class="plot-list" id="plotList"></div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════ MAP AREA ══════════ -->
+<div class="main-area">
+  <div class="map-toolbar">
+    <button class="basemap-btn" onclick="app.toggleSplitView()" id="btn-split">◫ Split</button>
+    <div class="toolbar-separator"></div>
+    <!-- Global basemap buttons (hidden in split mode) -->
+    <div class="global-basemaps" style="display:flex;gap:6px;align-items:center;">
+      <button class="basemap-btn active" onclick="app.switchBasemap('google')"    id="btn-google">Google</button>
+      <button class="basemap-btn"        onclick="app.switchBasemap('esri')"      id="btn-esri">ESRI</button>
+      <select id="esri-year"    class="basemap-btn" style="display:none;" onchange="app.updateEsriYear()">
+        <option value="latest" selected>Latest</option>
+        <option value="2024">2024</option>
+        <option value="2019">2019</option>
+      </select>
+      <button class="basemap-btn" onclick="app.switchBasemap('bing')"       id="btn-bing">Bing</button>
+      <button class="basemap-btn" onclick="app.switchBasemap('sentinel2')"  id="btn-sentinel2">Sentinel-2</button>
+      <select id="s2-year" class="basemap-btn" style="display:none;" onchange="app.updateSentinel2Year()">
+        <option value="2018">2018</option><option value="2019">2019</option><option value="2020">2020</option>
+        <option value="2021">2021</option><option value="2022">2022</option><option value="2023">2023</option>
+        <option value="2024" selected>2024</option>
+      </select>
+      <button class="basemap-btn" onclick="app.switchBasemap('planet')" id="btn-planet">Planet</button>
+      <select id="planet-year" class="basemap-btn" style="display:none;" onchange="app.updatePlanetParams()">
+        <option value="2016">2016</option><option value="2017">2017</option><option value="2018">2018</option>
+        <option value="2019">2019</option><option value="2020">2020</option><option value="2021">2021</option>
+        <option value="2022">2022</option><option value="2023">2023</option><option value="2024" selected>2024</option>
+        <option value="2025">2025</option>
+      </select>
+      <select id="planet-month" class="basemap-btn" style="display:none;" onchange="app.updatePlanetParams()">
+        <option value="01">Jan</option><option value="02">Feb</option><option value="03">Mar</option>
+        <option value="04">Apr</option><option value="05">May</option><option value="06" selected>Jun</option>
+        <option value="07">Jul</option><option value="08">Aug</option><option value="09">Sep</option>
+        <option value="10">Oct</option><option value="11">Nov</option><option value="12">Dec</option>
+      </select>
+      <div class="toolbar-separator"></div>
+    </div>
+    <button class="nav-btn prev" onclick="app.prevPlot()">← Prev</button>
+    <button class="nav-btn next" onclick="app.nextPlot()">Next →</button>
+    <button class="nav-btn" id="btn-ge" onclick="app.openGoogleEarth()" disabled style="background:#2a2d3a;color:var(--text);">🌍 GE Pro</button>
+    <div class="plot-counter" id="plotCounter">–</div>
+  </div>
+
+  <div id="map-wrapper">
+    <!-- LEFT MAP PANE -->
+    <div class="map-pane" id="pane-left">
+      <div class="mini-basemap-selector" id="mini-basemaps-left" style="display:none;">
+        <button class="mini-btn active" data-side="left" data-layer="google" onclick="app.setMapLayer('left','google')">Google</button>
+        <button class="mini-btn" data-side="left" data-layer="esri" onclick="app.setMapLayer('left','esri')">ESRI</button>
+        <select id="esri-year-left" class="mini-select" style="display:none;" onchange="app.setMapLayer('left','esri')">
+          <option value="latest" selected>Latest</option><option value="2024">2024</option><option value="2019">2019</option>
+        </select>
+        <button class="mini-btn" data-side="left" data-layer="bing" onclick="app.setMapLayer('left','bing')">Bing</button>
+        <button class="mini-btn" data-side="left" data-layer="sentinel2" onclick="app.setMapLayer('left','sentinel2')">S-2</button>
+        <select id="s2-year-left" class="mini-select" style="display:none;" onchange="app.setMapLayer('left','sentinel2')">
+          <option value="2018">2018</option><option value="2019">2019</option><option value="2020">2020</option>
+          <option value="2021">2021</option><option value="2022">2022</option><option value="2023">2023</option>
+          <option value="2024" selected>2024</option>
+        </select>
+        <button class="mini-btn" data-side="left" data-layer="planet" onclick="app.setMapLayer('left','planet')">Planet</button>
+        <select id="planet-year-left" class="mini-select" style="display:none;" onchange="app.setMapLayer('left','planet')">
+          <option value="2016">2016</option><option value="2017">2017</option><option value="2018">2018</option>
+          <option value="2019">2019</option><option value="2020">2020</option><option value="2021">2021</option>
+          <option value="2022">2022</option><option value="2023">2023</option><option value="2024" selected>2024</option>
+          <option value="2025">2025</option>
+        </select>
+        <select id="planet-month-left" class="mini-select" style="display:none;" onchange="app.setMapLayer('left','planet')">
+          <option value="01">Jan</option><option value="02">Feb</option><option value="03">Mar</option>
+          <option value="04">Apr</option><option value="05">May</option><option value="06" selected>Jun</option>
+          <option value="07">Jul</option><option value="08">Aug</option><option value="09">Sep</option>
+          <option value="10">Oct</option><option value="11">Nov</option><option value="12">Dec</option>
+        </select>
+      </div>
+      <div id="map" class="inner-map"></div>
+      <div class="coord-info" id="coordInfo">Click a plot to begin</div>
+    </div>
+
+    <!-- RIGHT MAP PANE -->
+    <div class="map-pane split-hidden" id="pane-right">
+      <div class="mini-basemap-selector" id="mini-basemaps-right">
+        <button class="mini-btn" data-side="right" data-layer="google" onclick="app.setMapLayer('right','google')">Google</button>
+        <button class="mini-btn" data-side="right" data-layer="esri" onclick="app.setMapLayer('right','esri')">ESRI</button>
+        <select id="esri-year-right" class="mini-select" style="display:none;" onchange="app.setMapLayer('right','esri')">
+          <option value="latest" selected>Latest</option><option value="2024">2024</option><option value="2019">2019</option>
+        </select>
+        <button class="mini-btn" data-side="right" data-layer="bing" onclick="app.setMapLayer('right','bing')">Bing</button>
+        <button class="mini-btn active" data-side="right" data-layer="sentinel2" onclick="app.setMapLayer('right','sentinel2')">S-2</button>
+        <select id="s2-year-right" class="mini-select" style="display:inline-block;" onchange="app.setMapLayer('right','sentinel2')">
+          <option value="2018">2018</option><option value="2019">2019</option><option value="2020">2020</option>
+          <option value="2021">2021</option><option value="2022">2022</option><option value="2023">2023</option>
+          <option value="2024" selected>2024</option>
+        </select>
+        <button class="mini-btn" data-side="right" data-layer="planet" onclick="app.setMapLayer('right','planet')">Planet</button>
+        <select id="planet-year-right" class="mini-select" style="display:none;" onchange="app.setMapLayer('right','planet')">
+          <option value="2016">2016</option><option value="2017">2017</option><option value="2018">2018</option>
+          <option value="2019">2019</option><option value="2020">2020</option><option value="2021">2021</option>
+          <option value="2022">2022</option><option value="2023">2023</option><option value="2024" selected>2024</option>
+          <option value="2025">2025</option>
+        </select>
+        <select id="planet-month-right" class="mini-select" style="display:none;" onchange="app.setMapLayer('right','planet')">
+          <option value="01">Jan</option><option value="02">Feb</option><option value="03">Mar</option>
+          <option value="04">Apr</option><option value="05">May</option><option value="06" selected>Jun</option>
+          <option value="07">Jul</option><option value="08">Aug</option><option value="09">Sep</option>
+          <option value="10">Oct</option><option value="11">Nov</option><option value="12">Dec</option>
+        </select>
+      </div>
+      <div id="mapRight" class="inner-map"></div>
+      <div class="coord-info" id="coordInfoRight">Right Map</div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════ RIGHT CLASSIFY PANEL ══ -->
+<div class="classify-panel">
+  <div class="classify-header">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h2>Classify This Plot</h2>
+      <button class="icon-btn" onclick="app.openClassEditor()" title="Edit class schema">✏</button>
+    </div>
+    <div class="ref-badge" id="molcaRef">Reference: <span>–</span></div>
+  </div>
+
+  <div class="class-list" id="classList"></div>
+
+  <div class="confidence-section">
+    <label>Confidence</label>
+    <div class="confidence-row">
+      <button class="conf-btn" onclick="app.setConfidence('High')">High</button>
+      <button class="conf-btn" onclick="app.setConfidence('Medium')">Medium</button>
+      <button class="conf-btn" onclick="app.setConfidence('Low')">Low</button>
+    </div>
+  </div>
+
+  <div class="notes-section">
+    <label style="font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:6px;">Notes</label>
+    <textarea id="notesInput" placeholder="Optional notes…"></textarea>
+  </div>
+
+  <div class="submit-section">
+    <button class="submit-btn" id="submitBtn" onclick="app.submitClassification()" disabled>Submit &amp; Next →</button>
+    <div style="display:flex;gap:6px;margin-top:8px;">
+      <button class="export-btn" onclick="app.exportCSV()" style="flex:1;">↓ CSV</button>
+      <button class="export-btn" onclick="app.exportGeoJSON()" style="flex:1;">↓ GeoJSON</button>
+    </div>
+  </div>
+</div>
+
+<!-- hidden file inputs for project import -->
+<input type="file" id="importProjectInput" accept=".json" style="display:none" onchange="app.onImportProjectFile(event)">
+
+<script type="module" src="/js/app.js"></script>
+</body>
+</html>
