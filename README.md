@@ -10,7 +10,7 @@ A self-hosted web app for satellite image interpretation and land-cover validati
 
 ## Features
 
-- **Multi-source basemaps** — Google Satellite, ESRI World Imagery (latest + Wayback 2024/2019), Bing, Sentinel-2 cloudless (2018–2024), Planet PlanetScope (monthly mosaics 2016–2025)
+- **Multi-source basemaps** — Google Satellite, ESRI World Imagery (latest + Wayback 2024/2019), Bing, Sentinel-2 cloudless (2018–2024), Planet PlanetScope (monthly mosaics 2016–2026)
 - **Dual map / split view** — Compare two basemaps side-by-side with synced pan/zoom
 - **Dynamic classification schemas** — 10 built-in real-world LULC presets (MOLCA, CORINE, IGBP/MODIS, ESA CCI, NLCD, IPCC, Anderson/USGS, FROM-GLC, Binary, Custom). Each project carries its own schema; edit, add, delete classes with color picker and keyboard shortcuts.
 - **GIS import** — `.csv` · `.geojson` · `.kml` · `.kmz` · Shapefile (`.zip`). Points and Polygons supported; polygon centroids used for navigation, full geometry drawn on the map.
@@ -229,4 +229,4 @@ For access to historical imagery with the time slider:
 - **Xiao Tan** — [@tanxiaoo](https://github.com/tanxiaoo) · `xiaotan.scu@gmail.com`
 - **Ammar** — [@Black-Lights](https://github.com/Black-Lights)
 
-Politecnico di Milano · 2025
+Politecnico di Milano · 2026

@@ -225,7 +225,7 @@ Feature collection with the **original input geometry** preserved (Point or Poly
         "classifiedLabel": "Forest",
         "confidence": "High",
         "notes": "",
-        "savedAt": "2025-11-01T11:05:23.000Z"
+        "savedAt": "2026-05-06T11:05:23.000Z"
       }
     }
   ]

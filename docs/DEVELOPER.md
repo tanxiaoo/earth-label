@@ -115,8 +115,8 @@ A project file in `data/projects/<id>.json`:
 {
   "id": "proj_1730000000_abc12",
   "name": "Nairobi 2024",
-  "created":  "2025-11-01T10:00:00.000Z",
-  "lastUsed": "2025-11-01T14:32:00.000Z",
+  "created":  "2026-05-06T10:00:00.000Z",
+  "lastUsed": "2026-05-06T14:32:00.000Z",
   "classSchema": [
     { "code": 20, "label": "Forest", "color": "#548235", "key": "1" },
     …
@@ -137,7 +137,7 @@ A project file in `data/projects/<id>.json`:
     "1": {
       "code": 20, "label": "Forest",
       "confidence": "High", "notes": "",
-      "savedAt": "2025-11-01T11:05:23.000Z"
+      "savedAt": "2026-05-06T11:05:23.000Z"
     },
     …
   }
