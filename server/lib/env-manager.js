@@ -3,25 +3,84 @@ const path = require('path');
 
 const ENV_PATH = path.join(__dirname, '../../.env');
 
+// Parse both proper `KEY=VALUE` lines AND legacy "# Planet\nPLAK..." style.
+// Returns { env, legacy: true } when legacy entries were found so the caller
+// can decide to re-format the file.
+function _parse(content) {
+  const env = {};
+  let legacy = false;
+  let lastComment = '';
+
+  for (const rawLine of content.split('\n')) {
+    const line = rawLine.trim();
+
+    if (!line) { lastComment = ''; continue; }
+    if (line.startsWith('#')) { lastComment = line.slice(1).trim().toLowerCase(); continue; }
+
+    const eq = line.indexOf('=');
+    if (eq !== -1) {
+      env[line.slice(0, eq).trim()] = line.slice(eq + 1).trim();
+      lastComment = '';
+      continue;
+    }
+
+    // Legacy: bare value. Identify by preceding comment first, then by prefix.
+    let mappedKey = null;
+    if (lastComment.includes('planet'))                       mappedKey = 'PLANET_API_KEY';
+    else if (lastComment.includes('esri') || lastComment.includes('arcgis')) mappedKey = 'ESRI_API_KEY';
+    else if (line.startsWith('PLAK'))                         mappedKey = 'PLANET_API_KEY';
+    else if (line.startsWith('AAPT'))                         mappedKey = 'ESRI_API_KEY';
+
+    if (mappedKey) { env[mappedKey] = line; legacy = true; }
+    lastComment = '';
+  }
+
+  return { env, legacy };
+}
+
+function _format(env) {
+  const lines = [
+    '# EarthLabel API keys — managed by the Settings UI',
+    '# Edit manually only if you know what you are doing',
+    '',
+  ];
+  if (env.PLANET_API_KEY) {
+    lines.push('# Planet API key  — https://www.planet.com/account/');
+    lines.push(`PLANET_API_KEY=${env.PLANET_API_KEY}`);
+    lines.push('');
+  }
+  if (env.ESRI_API_KEY) {
+    lines.push('# ESRI / ArcGIS API key — https://developers.arcgis.com/');
+    lines.push(`ESRI_API_KEY=${env.ESRI_API_KEY}`);
+    lines.push('');
+  }
+  // Preserve unknown keys
+  for (const [k, v] of Object.entries(env)) {
+    if (k === 'PLANET_API_KEY' || k === 'ESRI_API_KEY') continue;
+    lines.push(`${k}=${v}`);
+  }
+  return lines.join('\n');
+}
+
 function readEnv() {
   if (!fs.existsSync(ENV_PATH)) return {};
-  const result = {};
-  for (const line of fs.readFileSync(ENV_PATH, 'utf8').split('\n')) {
-    const t = line.trim();
-    if (!t || t.startsWith('#')) continue;
-    const eq = t.indexOf('=');
-    if (eq === -1) continue;
-    result[t.slice(0, eq).trim()] = t.slice(eq + 1).trim();
+  const { env, legacy } = _parse(fs.readFileSync(ENV_PATH, 'utf8'));
+  // One-shot auto-migration: rewrite legacy file in clean format
+  if (legacy && Object.keys(env).length) {
+    try { fs.writeFileSync(ENV_PATH, _format(env)); } catch (_) {}
   }
-  return result;
+  return env;
 }
 
 function writeEnv(updates) {
-  const merged = { ...readEnv(), ...updates };
+  const current = fs.existsSync(ENV_PATH)
+    ? _parse(fs.readFileSync(ENV_PATH, 'utf8')).env
+    : {};
+  const merged = { ...current, ...updates };
   for (const k of Object.keys(merged)) {
     if (merged[k] === '' || merged[k] == null) delete merged[k];
   }
-  fs.writeFileSync(ENV_PATH, Object.entries(merged).map(([k, v]) => `${k}=${v}`).join('\n') + '\n');
+  fs.writeFileSync(ENV_PATH, _format(merged));
 }
 
 module.exports = { readEnv, writeEnv };

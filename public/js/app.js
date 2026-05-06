@@ -20,15 +20,9 @@ function populatePresetSelect(selectId, presets) {
   presets.forEach(p => {
     const opt = document.createElement('option');
     opt.value = p.id;
-    opt.textContent = `${p.name} (${p.classCount})`;
+    opt.textContent = p.name;
     sel.appendChild(opt);
   });
-  if (selectId === 'presetSelect') {
-    const custom = document.createElement('option');
-    custom.value = 'custom';
-    custom.textContent = 'Custom (start blank)';
-    sel.appendChild(custom);
-  }
 }
 
 function setKeyBadge(id, isSet) {

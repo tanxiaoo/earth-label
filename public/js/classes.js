@@ -46,7 +46,7 @@ function _populateEditorPresets() {
   (state.presets || []).forEach(p => {
     const opt = document.createElement('option');
     opt.value = p.id;
-    opt.textContent = `${p.name} (${p.classCount})`;
+    opt.textContent = p.name;
     sel.appendChild(opt);
   });
 }
