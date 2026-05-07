@@ -99,6 +99,8 @@ body {
 .basemap-btn:hover  { border-color:var(--accent);color:var(--text); }
 .basemap-btn.active { background:var(--accent);color:#fff;border-color:var(--accent); }
 .basemap-btn select { font-family:'DM Sans',sans-serif; }
+select.basemap-btn option,
+select.mini-select option { color:#000;background:#fff; }
 
 .toolbar-separator { width:1px;height:24px;background:var(--panel-border);margin:0 2px; }
 
