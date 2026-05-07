@@ -12,13 +12,13 @@ A self-hosted web app for satellite image interpretation and land-cover validati
 
 - **Multi-source basemaps** — Google Satellite, ESRI World Imagery (latest + Wayback year-end snapshots 2018–2025, no API key required), Bing, Sentinel-2 cloudless (2018–2024), Planet PlanetScope (monthly mosaics 2016–2026)
 - **Dual map / split view** — Compare two basemaps side-by-side with synced pan/zoom
-- **Dynamic classification schemas** — 10 built-in real-world LULC presets (MOLCA, CORINE, IGBP/MODIS, ESA CCI, NLCD, IPCC, Anderson/USGS, FROM-GLC, Binary, Custom). Each project carries its own schema; edit, add, delete classes with color picker and keyboard shortcuts.
+- **Dynamic classification schemas** — 10 built-in real-world LULC presets (MOLCA, CORINE, IGBP/MODIS, ESA CCI, NLCD, IPCC, Anderson/USGS, FROM-GLC, Binary, Custom). Each project carries its own schema; edit, add, delete classes with color picker and keyboard shortcuts. Save any edited schema as a reusable user preset.
 - **GIS import** — `.csv` · `.geojson` · `.kml` · `.kmz` · Shapefile (`.zip`). Points and Polygons supported; polygon centroids used for navigation, full geometry drawn on the map.
-- **Server-side API key management** — Planet/ESRI keys stored in `.env` and proxied through the backend. Keys never reach the browser.
+- **Server-side API key management** — Planet key stored in `.env` and proxied through the backend; the key never reaches the browser. Esri layers are public — no key needed.
 - **Project files on disk** — Each project = one JSON file in `data/projects/`. Portable, version-controllable, easy to share. Export/import any project as a `.json` file.
 - **Auto-save** — Every classification result persists immediately via incremental PATCH to the backend.
-- **Multiple export formats** — CSV (flat results) and GeoJSON (with original geometry preserved).
-- **Google Earth Pro sync** — Live KML feed at `/kml/current.kml` auto-flies Google Earth Pro to the current plot.
+- **Multiple export formats** — CSV (flat results) and GeoJSON (with original geometry preserved). Re-classifying a plot updates the next CSV/GeoJSON export immediately.
+- **Google Earth integration** — One-shot **Google Earth Web** button opens the current plot in a new tab. Live **Google Earth Pro** sync via NetworkLink (`/kml/current.kml`) flies the camera to each plot. Toolbar slider (50–5000 m) controls the camera distance for both, persisted across sessions.
 - **Keyboard shortcuts** — Rapid classification with per-class hotkeys, confidence levels (`h`/`m`/`l`), `Enter` or `Space` to submit, arrow keys to navigate.
 
 ---
@@ -41,9 +41,11 @@ npm start
 
 That's it. Open the URL in your browser.
 
-### 3. Add API keys (optional, for Planet/ESRI imagery)
+### 3. Add a Planet API key (optional, for PlanetScope imagery)
 
-Click the **⚙ Settings** icon (top-left) and paste your Planet and/or ESRI API keys. They're written to `.env` on the server — never sent back to the browser. Both legacy bare-value `.env` files and proper `KEY=VALUE` files are auto-detected and migrated.
+Click the **⚙ Settings** icon (top-left) and paste your Planet API key. It is written to `.env` on the server — never sent back to the browser. Both legacy bare-value `.env` files and proper `KEY=VALUE` files are auto-detected and migrated.
+
+Esri layers (World Imagery and Wayback) are public — no API key required.
 
 ---
 
@@ -94,7 +96,9 @@ earth-label/
 │       ├── map.js             ← Leaflet dual-map + tile layers
 │       ├── classes.js         ← Class editor + render
 │       └── export.js          ← CSV / GeoJSON / project export
-└── data/projects/             ← Project JSON files (gitignored)
+└── data/                      ← Local data (gitignored)
+    ├── projects/              ← Project JSON files
+    └── user_presets.json      ← Schemas saved as reusable presets
 ```
 
 See [docs/](docs/) for detailed guides.
@@ -110,7 +114,9 @@ See [docs/](docs/) for detailed guides.
 
 ---
 
-## CSV Format (input)
+## CSV Format
+
+### Input (upload)
 
 Your input CSV must contain `LAT` and `LON` columns. Plot ID and reference class are optional.
 
@@ -120,7 +126,7 @@ PLOTID,LAT,LON,ref_code,ref_label
 2,7.5617,13.7757,5,Shrubland
 ```
 
-Recognised aliases:
+Recognised aliases on upload:
 
 | Field         | Accepted column names |
 |---------------|------------------------|
@@ -131,6 +137,18 @@ Recognised aliases:
 | Ref. label    | `molca_label`, `ref_label`, `class_label`, `label` |
 
 Unknown columns are preserved as plot metadata and round-trip into GeoJSON exports.
+
+### Output (CSV download)
+
+```
+PLOTID, LAT, LON, ref_code, ref_label, class_code, class_label, confidence, notes
+```
+
+A UTF-8 BOM is prepended so Excel renders non-ASCII project / class names correctly. The export reads from live in-memory state, so re-classifying a previous plot is reflected on the **next** download immediately.
+
+### Output (GeoJSON download)
+
+Each feature carries the canonical snake-case properties (`plot_id, lat, lon, ref_code, ref_label, class_code, class_label, confidence, notes, project_name, saved_at`) plus any extra columns from the original upload, and the original `geometry` (Point or Polygon).
 
 ---
 
@@ -157,8 +175,10 @@ For polygon features the centroid is used for map navigation; the full geometry 
 | `GET`    | `/api/keys/status`              | Returns `{planet: bool, esri: bool}` |
 | `POST`   | `/api/keys`                     | Save Planet/ESRI keys to `.env` |
 | `DELETE` | `/api/keys`                     | Clear key(s) |
-| `GET`    | `/api/presets`                  | List preset summaries |
+| `GET`    | `/api/presets`                  | List preset summaries (built-in + user) |
 | `GET`    | `/api/presets/:id`              | Full preset with class list |
+| `POST`   | `/api/presets`                  | Save current schema as a user preset |
+| `DELETE` | `/api/presets/:id`              | Delete a user preset (built-ins are immutable) |
 | `GET`    | `/api/projects`                 | List all projects |
 | `POST`   | `/api/projects`                 | Create from file upload (multipart) |
 | `POST`   | `/api/projects/json`            | Create from raw JSON body |
@@ -182,19 +202,25 @@ For polygon features the centroid is used for map navigation; the full geometry 
 |-----------------|--------|
 | `1`–`9`, `0`, `q`–`p` | Select class (depending on schema) |
 | `h` / `m` / `l` | Confidence: High / Medium / Low |
-| `Enter`         | Submit & go to next plot |
+| `Enter` or `Space` | Submit & go to next plot |
 | `←` / `→`       | Previous / Next plot |
 | `n` / `p`       | Next / Previous plot (alt) |
 
 ---
 
-## Google Earth Pro Integration
+## Google Earth Integration
 
+Two independent ways to view a plot in Google Earth:
+
+### Google Earth Web (one-shot, no install)
+Click **🌍 Google Earth** in the toolbar. The current plot opens in a new tab. Each click is independent — navigating to the next plot does not auto-open another tab. The toolbar zoom slider sets the camera distance embedded in the URL (approximate; GE Web snaps to its own zoom levels).
+
+### Google Earth Pro (live sync)
 For access to historical imagery with the time slider:
 
-1. Open Google Earth Pro
-2. Open `google_earth_link.kml` (will auto-refresh from `/kml/current.kml`)
-3. As you navigate plots in the web app, Google Earth Pro auto-flies to each one
+1. Open Google Earth Pro.
+2. Open `google_earth_link.kml` from the project root — it adds a NetworkLink that polls `http://localhost:3000/kml/current.kml` every second.
+3. As you navigate plots in the web app, Google Earth Pro auto-flies to each one. Drag the toolbar zoom slider (50–5000 m) to change the camera distance live; GE Pro picks it up on the next poll.
 
 ---
 

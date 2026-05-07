@@ -24,15 +24,13 @@ Open <http://localhost:3000>. On first launch you'll see the welcome screen with
 
 ## 2. Setting API Keys
 
-Some basemaps need API keys.
+Only the **Planet** layer needs an API key. Esri (World Imagery + Wayback) is public.
 
 1. Click the **⚙** icon in the top-left sidebar
-2. Paste your key(s):
-   - **Planet API key** — for PlanetScope monthly mosaics ([sign up](https://www.planet.com/account/))
-   - **ESRI / ArcGIS key** — optional, for authenticated ArcGIS services
+2. Paste your **Planet API key** ([sign up](https://www.planet.com/account/))
 3. Click **Save**
 
-Keys are stored in `.env` on the server (your local machine) and proxied through the backend. They never reach the browser. Click the **✕** next to a field to clear that key.
+The key is stored in `.env` on the server (your local machine) and proxied through the backend. It never reaches the browser. Click the **✕** next to the field to clear it.
 
 > The server auto-detects legacy `.env` files (bare values under `# Planet` / `# Esri` comments) and migrates them to proper `KEY=VALUE` format on first read.
 
@@ -97,17 +95,18 @@ After creation, you can edit the schema at any time via the **✏** icon in the 
 ### Map toolbar
 - **◫ Split** — toggle dual-map mode
 - Basemap buttons: Google · ESRI · Bing · Sentinel-2 · Planet
-- Year selectors appear next to ESRI / Sentinel-2 / Planet
+- Year selectors appear next to ESRI (Wayback year-end snapshots 2018–2025) / Sentinel-2 / Planet
 - **← Prev / Next →** plot navigation
-- **🌍 GE Pro** — toggle Google Earth Pro auto-fly
+- **🌍 Google Earth** — open the current plot in Google Earth Web (one-shot, opens a new tab)
+- **Zoom slider** (next to the GE button) — drag to set the camera distance (50–5000 m) for both Google Earth Web and the live Google Earth Pro NetworkLink. Persists across sessions.
 
 ### Right panel — Classification
-- **Reference: …** — shows the original class from the input file (color-coded if it matches the current schema)
+- **Reference: …** — shows the original class from the input file (color-coded if it matches the current schema). Once you've classified the plot, a second line **Your label: …** appears with your chosen class.
 - **Class buttons** — one per class in the current schema; keyboard shortcut shown on the right
 - **Confidence** — High / Medium / Low
 - **Notes** — optional free-text
-- **Submit & Next →** — saves and auto-advances to the next pending plot
-- **↓ CSV / ↓ GeoJSON** — export results in either format
+- **Submit & Next →** — saves and auto-advances to the next pending plot (`Enter` or `Space`)
+- **↓ CSV / ↓ GeoJSON** — export results in either format. Re-classifying a previous plot is reflected in the next export.
 
 ---
 
@@ -143,23 +142,32 @@ Click the **✏** icon in the right panel header.
 In the editor:
 - **Add Class** — create a new row
 - For each class, edit color (color-picker), code (numeric ID), label, and key shortcut (single character)
-- **Load preset** — replace the current schema with any built-in preset
+- **Load preset** — replace the current schema with any built-in or user preset
 - **↑ Import CSV** — load a schema from a CSV with `code,label,color,key` columns
 - **↓ Export CSV** — download the current schema
-- **Save Schema** — persist to the project
+- **★ Save as Preset** — prompts for a name and saves the current schema as a reusable preset (stored in `data/user_presets.json`). Appears in the preset selector for new projects and in the editor's **Load preset** dropdown.
+- **Save Schema** — persist to the current project
 
 The schema is saved on the server in the project file. Existing classifications are preserved (they reference the class code, not the position).
 
 ---
 
-## 8. Google Earth Pro Sync
+## 8. Google Earth Integration
 
+There are two independent options.
+
+### 8a. Google Earth Web (one-shot)
+Click **🌍 Google Earth** in the toolbar. The current plot opens in a new tab. Each click is independent — the next plot does not auto-open another tab.
+
+The toolbar **zoom slider** sets the camera distance embedded in the URL (approximate; GE Web snaps to its own zoom levels — round numbers like 200, 500, 1000 m work best).
+
+### 8b. Google Earth Pro (live sync, time slider)
 For access to historical imagery with the time slider:
 
 1. Open Google Earth Pro
 2. Open `google_earth_link.kml` (in the project folder) — Google Earth Pro adds a NetworkLink that auto-refreshes every second from `http://localhost:3000/kml/current.kml`
-3. Click the **🌍 GE Pro** button in the toolbar to activate the sync
-4. As you navigate plots, Google Earth Pro auto-flies to each one
+3. As you navigate plots, Google Earth Pro auto-flies to each one
+4. Drag the toolbar **zoom slider** (50–5000 m) — Google Earth Pro picks up the new camera distance on the next poll (within ~1 s)
 5. Use Google Earth Pro's time slider to compare imagery dates
 
 ---
@@ -170,9 +178,11 @@ Three buttons in the right panel:
 
 | Button         | Output |
 |----------------|--------|
-| **↓ CSV**      | Flat CSV with `project_name, PLOTID, LAT, LON, ref_code, ref_label, classified_code, classified_label, confidence, notes` |
-| **↓ GeoJSON**  | FeatureCollection with original geometry preserved (point or polygon) and all results in `properties` |
+| **↓ CSV**      | Flat CSV with `PLOTID, LAT, LON, ref_code, ref_label, class_code, class_label, confidence, notes`. UTF-8 BOM prepended so Excel handles non-ASCII names. |
+| **↓ GeoJSON**  | FeatureCollection with original geometry preserved (point or polygon) and snake-case canonical properties (`plot_id, lat, lon, ref_code, ref_label, class_code, class_label, confidence, notes, project_name, saved_at`) plus any unknown columns from the upload |
 | **↓** (sidebar) | Full project as `.json` — includes plots, results, schema. Re-importable. |
+
+Both CSV and GeoJSON read from live in-memory state, so re-classifying a previous plot is reflected on the **next** download immediately.
 
 ---
 
@@ -183,7 +193,7 @@ Three buttons in the right panel:
 | `1` `2` `3` … `0`        | Select class (mapped per schema) |
 | `q` `w` `e` … `p`        | Select class (additional, used by larger schemas) |
 | `h` / `m` / `l`          | Confidence: High / Medium / Low |
-| `Enter`                  | Submit current classification & next plot |
+| `Enter` or `Space`       | Submit current classification & next plot |
 | `→` or `n`               | Next plot |
 | `←` or `p`               | Previous plot |
 

@@ -80,9 +80,8 @@ export const state = {
   leftBasemap:      'google',
   rightBasemap:     'sentinel2',
   isFirstPlotLoad:  true,
-  googleEarthActive: false,
-  geWindowRef:      null,
-  presets:          [],
+  presets:          [],     // built-in + user presets, cached from /api/presets
+  geRange:          1000,   // GE Pro / GE Web camera distance, meters; persisted to localStorage
 };
 
 export function setState(updates) { Object.assign(state, updates); }
@@ -160,10 +159,14 @@ A project file in `data/projects/<id>.json`:
 | DELETE | `/api/keys`           | `{planet?:true, esri?:true}` | `{success:true}` |
 
 ### Presets
-| Method | Path                | Returns |
-|--------|---------------------|---------|
-| GET    | `/api/presets`      | array of `{id, name, description, source, url, classCount}` |
-| GET    | `/api/presets/:id`  | full preset including `classes[]` |
+| Method | Path                | Body                                | Returns |
+|--------|---------------------|-------------------------------------|---------|
+| GET    | `/api/presets`      | —                                   | array of `{id, name, description, source, url, classCount, user}` (built-ins + user presets) |
+| GET    | `/api/presets/:id`  | —                                   | full preset including `classes[]` |
+| POST   | `/api/presets`      | `{name, classes[], description?}`   | `{id}` — id is prefixed `user_…` |
+| DELETE | `/api/presets/:id`  | —                                   | `{success:true}` (built-ins are immutable) |
+
+User presets are stored in `data/user_presets.json` (gitignored) and merged with the built-ins from `server/lib/class-presets.js` on every list call.
 
 ### Projects
 | Method | Path                              | Body                                                   | Returns |
@@ -186,10 +189,12 @@ A project file in `data/projects/<id>.json`:
 | GET    | `/api/tiles/esri-world/:z/:y/:x`                   |
 
 ### KML (Google Earth Pro)
-| Method | Path                | Body                         |
-|--------|---------------------|------------------------------|
-| POST   | `/kml/update`       | `{lat, lon, id, label}`      |
-| GET    | `/kml/current.kml`  | KML doc with current plot    |
+| Method | Path                | Body                                  |
+|--------|---------------------|---------------------------------------|
+| POST   | `/kml/update`       | `{lat?, lon?, id?, label?, range?}`   |
+| GET    | `/kml/current.kml`  | KML doc with current plot + LookAt range |
+
+`range` is the camera-to-target distance in meters (`<LookAt><range>`), default 1000. The browser POSTs it on every plot navigation and on every drag of the toolbar zoom slider — slider drags can be range-only (no coords). Google Earth Pro picks up changes via the NetworkLink poll (~1 s).
 
 ---
 
@@ -281,7 +286,7 @@ Frontend has no build step — just hard-refresh the browser (`Ctrl+Shift+R`) af
 
 - Polygon overlay only on the left map pane (not synced to the right pane)
 - Tile proxy doesn't cache — every browser request hits upstream (browsers do their own HTTP caching)
-- ESRI Wayback release IDs (`16453` for 2024-12, `4756` for 2019-12) are hardcoded; update in `public/js/map.js` and `server/routes/tiles.js` if you need different snapshots
+- ESRI Wayback year-end release IDs (2018→23448, 2019→4756, 2020→29260, 2021→26120, 2022→45134, 2023→56102, 2024→16453, 2025→13192) are hardcoded in `public/js/map.js`. To add a new year, look it up in https://s3-us-west-2.amazonaws.com/config.maptiles.arcgis.com/waybackconfig.json and append a row to the `wayback` map; also add the year to the three `<select id="esri-year*">` dropdowns in `public/index.html`. The Wayback proxy in `server/routes/tiles.js` follows redirects and needs no further change.
 - No multi-user / authentication — assumes single-user localhost
 - No geometry projection support — input is assumed to be WGS84 (EPSG:4326)
 

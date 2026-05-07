@@ -196,16 +196,19 @@ If your file has an unusual extension, rename it before upload.
 ### CSV (`↓ CSV` button)
 
 ```csv
-project_name,PLOTID,LAT,LON,ref_code,ref_label,classified_code,classified_label,confidence,notes
-"Nairobi 2024",1,0.5856,27.7400,20,Forest,20,Forest,High,""
-"Nairobi 2024",2,7.5617,13.7757,5,Shrubland,8,Cropland,Medium,"misclassified in 2019"
+PLOTID,LAT,LON,ref_code,ref_label,class_code,class_label,confidence,notes
+1,0.5856,27.7400,20,Forest,20,Forest,High,
+2,7.5617,13.7757,5,Shrubland,8,Cropland,Medium,"misclassified in 2019"
 ```
 
-Flat, suitable for analysis in Pandas / Excel / R.
+- Identity columns are uppercase (`PLOTID`, `LAT`, `LON`); result columns are snake-case.
+- Project name and timestamps are intentionally omitted from the CSV — the project name lives in the filename, and per-row timestamps clutter analytical exports. Use the GeoJSON export or the project `.json` if you need them.
+- A UTF-8 BOM is prepended so Excel renders non-ASCII project / class names correctly.
+- Flat, suitable for analysis in Pandas / Excel / R.
 
 ### GeoJSON (`↓ GeoJSON` button)
 
-Feature collection with the **original input geometry** preserved (Point or Polygon), and all classification fields in `properties`:
+Feature collection with the **original input geometry** preserved (Point or Polygon). Properties use the canonical snake-case schema, and any unknown columns from the upload round-trip alongside:
 
 ```json
 {
@@ -216,16 +219,17 @@ Feature collection with the **original input geometry** preserved (Point or Poly
       "type": "Feature",
       "geometry": { "type": "Point", "coordinates": [27.74, 0.5856] },
       "properties": {
-        "plotId": "1",
+        "plot_id": "1",
         "lat": 0.5856,
         "lon": 27.74,
-        "refCode": "20",
-        "refLabel": "Forest",
-        "classifiedCode": 20,
-        "classifiedLabel": "Forest",
+        "ref_code": "20",
+        "ref_label": "Forest",
+        "class_code": 20,
+        "class_label": "Forest",
         "confidence": "High",
         "notes": "",
-        "savedAt": "2026-05-06T11:05:23.000Z"
+        "project_name": "Nairobi 2024",
+        "saved_at": "2026-05-06T11:05:23.000Z"
       }
     }
   ]
@@ -233,6 +237,10 @@ Feature collection with the **original input geometry** preserved (Point or Poly
 ```
 
 Loadable directly in QGIS, ArcGIS, leaflet, mapbox, etc.
+
+### Freshness
+
+Both CSV and GeoJSON exports read from live in-memory state, so re-classifying any plot (including back-navigation) is reflected on the **next** download immediately.
 
 ### Project file (`↓` in sidebar)
 
