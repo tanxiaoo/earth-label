@@ -1,0 +1,19 @@
+{
+  "name": "earth-label",
+  "version": "2.0.0",
+  "description": "Satellite image land cover labeling tool",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js"
+  },
+  "dependencies": {
+    "@tmcw/togeojson": "^5.8.0",
+    "@xmldom/xmldom": "^0.8.10",
+    "adm-zip": "^0.5.16",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "multer": "^1.4.5-lts.1",
+    "shapefile": "^0.6.6"
+  }
+}
