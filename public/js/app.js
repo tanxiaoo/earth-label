@@ -3,8 +3,8 @@ import * as api from './api.js';
 import { initMap, navigateToPlot, setMapLayer, switchBasemap, toggleSplitView,
          updateEsriYear, updateSentinel2Year, updatePlanetParams } from './map.js';
 import { renderClassButtons, openClassEditor, closeClassEditor, saveClassSchema,
-         addEditorClass, applyEditorPreset, exportClassSchema, importClassSchema,
-         renderSchemaPreview } from './classes.js';
+         saveSchemaAsPreset, addEditorClass, applyEditorPreset, exportClassSchema,
+         importClassSchema, renderSchemaPreview } from './classes.js';
 import { exportCSV, exportGeoJSON, exportProjectFile } from './export.js';
 
 // ── tiny helpers ──────────────────────────────────────────────────────────
@@ -37,6 +37,14 @@ async function init() {
   initMap();
   setupDropZone();
 
+  // Hydrate GE zoom slider from saved value
+  const slider = $('geRangeSlider');
+  if (slider) {
+    slider.value = state.geRange;
+    const lbl = $('geRangeLabel');
+    if (lbl) lbl.textContent = `${state.geRange} m`;
+  }
+
   try {
     const presets = await api.listPresets();
     setState({ presets });
@@ -46,7 +54,6 @@ async function init() {
   try {
     const status = await api.getKeyStatus();
     setKeyBadge('planetKeyStatus', status.planet);
-    setKeyBadge('esriKeyStatus',   status.esri);
   } catch (_) {}
 
   try {
@@ -231,7 +238,16 @@ function renderPlotList() {
       return true;
     })
     .forEach(p => {
-      const refCls = schema.find(c => String(c.code) === String(p.refCode));
+      // Tag rule:
+      //   - "Done" filter view → show the user's latest classification
+      //     (so it acts as the "Done list" with each plot's chosen label).
+      //   - "All" / "Pending" → show the reference class so users can
+      //     compare against ground truth at a glance.
+      const showUserLabel = state.currentFilter === 'done' && p.completed;
+      const tagCls = showUserLabel
+        ? schema.find(c => String(c.code) === String(p.resultCode))
+        : schema.find(c => String(c.code) === String(p.refCode));
+      const fallbackLabel = showUserLabel ? p.resultLabel : p.refLabel;
       const div = document.createElement('div');
       div.className = `plot-item ${p.idx===state.currentIndex?'active':''} ${p.completed?'completed':''}`;
       div.onclick = () => goToPlot(p.idx);
@@ -241,9 +257,9 @@ function renderPlotList() {
           <div class="plot-id">Plot #${p.id}</div>
           <div class="plot-label">${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}</div>
         </div>
-        ${refCls
-          ? `<span class="plot-molca-badge" style="background:${refCls.color}">${refCls.label}</span>`
-          : (p.refLabel ? `<span class="plot-molca-badge" style="background:#555;color:#fff">${p.refLabel}</span>` : '')}`;
+        ${tagCls
+          ? `<span class="plot-molca-badge" style="background:${tagCls.color}">${tagCls.label}</span>`
+          : (fallbackLabel ? `<span class="plot-molca-badge" style="background:#555;color:#fff">${fallbackLabel}</span>` : '')}`;
       list.appendChild(div);
     });
 }
@@ -272,14 +288,20 @@ export function goToPlot(index) {
   navigateToPlot(p);
   setState({ isFirstPlotLoad: false });
 
-  api.updateKML(p.lat, p.lon, p.id, p.refLabel || '');
+  api.updateKML(p.lat, p.lon, p.id, p.refLabel || '', state.geRange);
 
-  const schema   = state.project?.classSchema || [];
-  const refCls   = schema.find(c => String(c.code) === String(p.refCode));
-  const refColor = refCls?.color || '#888';
-  const refText  = refCls ? `${refCls.label} (${p.refCode})`
-                           : (p.refLabel || '–');
-  $('molcaRef').innerHTML = `Reference: <span style="color:${refColor}">${refText}</span>`;
+  const schema    = state.project?.classSchema || [];
+  const refCls    = schema.find(c => String(c.code) === String(p.refCode));
+  const refColor  = refCls?.color || '#888';
+  const refText   = refCls ? `${refCls.label} (${p.refCode})`
+                            : (p.refLabel || '–');
+  const userCls   = schema.find(c => String(c.code) === String(p.resultCode));
+  const userColor = userCls?.color || '#888';
+  const userText  = userCls ? `${userCls.label} (${p.resultCode})`
+                             : (p.resultLabel || null);
+  $('molcaRef').innerHTML =
+    `Reference: <span style="color:${refColor}">${refText}</span>` +
+    (userText ? `<br><span style="opacity:.85;">Your label: <span style="color:${userColor}">${userText}</span></span>` : '');
 
   setState({ selectedClass: p.resultCode??null, selectedConfidence: p.confidence??null });
   $('notesInput').value = p.notes || '';
@@ -290,10 +312,6 @@ export function goToPlot(index) {
   $('plotCounter').textContent = `${index+1} / ${plots.length}`;
   renderPlotList();
 
-  if (state.googleEarthActive) {
-    state.geWindowRef = window.open(`https://earth.google.com/web/@${p.lat},${p.lon},0a,1000d,35y,0h,0t,0r`, 'gew');
-    window.focus();
-  }
 }
 
 export function nextPlot() {
@@ -307,16 +325,32 @@ export function prevPlot() {
   if (state.currentIndex > 0) goToPlot(state.currentIndex - 1);
 }
 
+// One-shot: opens Google Earth Web for the current plot in a new tab.
+// Subsequent plot navigations do not auto-open — the user clicks the button
+// each time they want to view a plot in Google Earth.
+// The URL distance segment (`<range>d`) uses the current toolbar zoom.
+// GE Web's URL parser snaps to its own zoom levels, so it's approximate;
+// GE Pro receives the exact same value live via the KML NetworkLink.
 export function openGoogleEarth() {
-  const btn = $('btn-ge');
-  state.googleEarthActive = !state.googleEarthActive;
-  if (state.googleEarthActive) {
-    btn.textContent='🌍 GE Pro ●'; btn.style.background='var(--accent)'; btn.style.color='#fff';
-    const p = state.plots[state.currentIndex];
-    if (p) { state.geWindowRef = window.open(`https://earth.google.com/web/@${p.lat},${p.lon},0a,1000d,35y,0h,0t,0r`, 'gew'); window.focus(); }
-  } else {
-    btn.textContent='🌍 GE Pro'; btn.style.background='#2a2d3a'; btn.style.color='var(--text)';
-  }
+  const p = state.plots[state.currentIndex];
+  if (!p) return;
+  const d = Math.max(50, Number(state.geRange) || 1000);
+  window.open(
+    `https://earth.google.com/web/@${p.lat},${p.lon},0a,${d}d,35y,0h,0t,0r`,
+    '_blank',
+    'noopener'
+  );
+}
+
+// Toolbar slider — drag to set GE Pro / GE Web view distance in meters.
+// Push to the server live so GE Pro updates within ~1s.
+export function onGeRangeInput(value) {
+  const v = Math.max(50, Math.min(5000, Number(value) || 1000));
+  setState({ geRange: v });
+  localStorage.setItem('geRange', String(v));
+  const label = $('geRangeLabel');
+  if (label) label.textContent = `${v} m`;
+  api.updateKMLRange(v);
 }
 
 // ── Classification ────────────────────────────────────────────────────────
@@ -354,14 +388,25 @@ export async function submitClassification() {
     notes:      $('notesInput').value,
   };
 
-  // Optimistic update in state
+  // Optimistic update — keep both `plots[i]` (UI source) and
+  // `project.results[id]` (export/saved_at source) in sync so CSV/GeoJSON
+  // exports reflect the latest classification immediately and re-classifying
+  // a previous plot is captured.
   const plots = [...state.plots];
   plots[plotIdx] = { ...plots[plotIdx], resultCode:result.code, resultLabel:result.label,
                      confidence:result.confidence, notes:result.notes, completed:true };
-  setState({ plots, selectedClass:null, selectedConfidence:null });
+  const results = { ...(state.project.results || {}),
+                    [plotId]: { ...result, savedAt: new Date().toISOString() } };
+  setState({
+    plots,
+    project: { ...state.project, results },
+    selectedClass: null,
+    selectedConfidence: null,
+  });
 
   $('notesInput').value = '';
   updateProgress();
+  renderPlotList();
 
   // Persist
   api.saveResult(state.project.id, plotId, result).catch(console.error);
@@ -371,31 +416,29 @@ export async function submitClassification() {
 
 // ── Settings ──────────────────────────────────────────────────────────────
 export function openSettings() {
-  $('planetApiKey').value = ''; $('esriApiKey').value = '';
+  $('planetApiKey').value = '';
   errMsg('settingsMsg', '');
-  api.getKeyStatus().then(s => { setKeyBadge('planetKeyStatus',s.planet); setKeyBadge('esriKeyStatus',s.esri); }).catch(()=>{});
+  api.getKeyStatus().then(s => setKeyBadge('planetKeyStatus', s.planet)).catch(()=>{});
   show('settingsModal');
 }
 export function closeSettings() { hide('settingsModal'); }
 
 export async function saveSettings() {
   const planet = $('planetApiKey').value.trim();
-  const esri   = $('esriApiKey').value.trim();
-  if (!planet && !esri) { errMsg('settingsMsg','Enter at least one key'); return; }
+  if (!planet) { errMsg('settingsMsg','Enter the Planet API key'); return; }
   try {
-    if (planet) await api.saveKeys({ planet });
-    if (esri)   await api.saveKeys({ esri });
+    await api.saveKeys({ planet });
     const s = await api.getKeyStatus();
-    setKeyBadge('planetKeyStatus',s.planet); setKeyBadge('esriKeyStatus',s.esri);
+    setKeyBadge('planetKeyStatus', s.planet);
     errMsg('settingsMsg','');
     closeSettings();
-  } catch (e) { errMsg('settingsMsg',e.message); }
+  } catch (e) { errMsg('settingsMsg', e.message); }
 }
 
 export async function clearKey(which) {
   await api.deleteKeys({ [which]:true });
   const s = await api.getKeyStatus();
-  setKeyBadge('planetKeyStatus',s.planet); setKeyBadge('esriKeyStatus',s.esri);
+  setKeyBadge('planetKeyStatus', s.planet);
 }
 
 // ── Demo data ─────────────────────────────────────────────────────────────
@@ -452,7 +495,10 @@ document.addEventListener('keydown', (e) => {
   if (cls) { selectClass(cls.code); return; }
   if (e.key === 'ArrowRight' || e.key === 'n') nextPlot();
   if (e.key === 'ArrowLeft'  || e.key === 'p') prevPlot();
-  if (e.key === 'Enter' && !$('submitBtn').disabled) submitClassification();
+  if ((e.key === 'Enter' || e.key === ' ') && !$('submitBtn').disabled) {
+    e.preventDefault();   // suppress page scroll on Space
+    submitClassification();
+  }
   if (e.key === 'h') setConfidence('High');
   if (e.key === 'm') setConfidence('Medium');
   if (e.key === 'l') setConfidence('Low');
@@ -468,10 +514,10 @@ window.app = {
   updateEsriYear, updateSentinel2Year, updatePlanetParams,
   selectClass, setConfidence, submitClassification,
   openSettings, closeSettings, saveSettings, clearKey,
-  openClassEditor, closeClassEditor, saveClassSchema,
+  openClassEditor, closeClassEditor, saveClassSchema, saveSchemaAsPreset,
   addEditorClass, applyEditorPreset, exportClassSchema, importClassSchema,
   exportCSV, exportGeoJSON,
-  openGoogleEarth,
+  openGoogleEarth, onGeRangeInput,
 };
 
 // ── Start ─────────────────────────────────────────────────────────────────

@@ -7,6 +7,24 @@ const { parseGIS } = require('../lib/gis-parser');
 const DATA_DIR = path.join(__dirname, '../../data/projects');
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
 
+// Some multer/busboy versions decode multipart text fields as latin1 even
+// though browsers send UTF-8 — that turns "Africa—test" (em-dash bytes
+// e2 80 94) into mojibake like "AfricaâÂ€"test".
+//
+// Heuristic: detect a UTF-8 lead byte (Â-ô in latin1 view) followed by
+// 1-3 continuation bytes (-¿). If found, re-decode from latin1 to
+// utf8. Otherwise leave the string alone — modern multer hands us proper
+// UTF-8 already.
+function utf8(s) {
+  if (typeof s !== 'string' || !s) return s;
+  if (/[Â-ß][-¿]/.test(s) ||
+      /[à-ï][-¿]{2}/.test(s) ||
+      /[ð-ô][-¿]{3}/.test(s)) {
+    return Buffer.from(s, 'latin1').toString('utf8');
+  }
+  return s;
+}
+
 function projPath(id) { return path.join(DATA_DIR, `${id}.json`); }
 function ensureDir() { if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true }); }
 function readProj(id) { return JSON.parse(fs.readFileSync(projPath(id), 'utf8')); }
@@ -70,7 +88,7 @@ router.post('/parse-file', upload.single('file'), async (req, res) => {
 // POST /api/projects — create new project (with file upload)
 router.post('/', upload.single('file'), async (req, res) => {
   ensureDir();
-  const name = (req.body.name || '').trim();
+  const name = utf8(req.body.name || '').trim();
   if (!name) return res.status(400).json({ error: 'Project name required' });
 
   let classSchema;

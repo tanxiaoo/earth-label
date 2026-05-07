@@ -14,50 +14,73 @@ function _safeName(name) {
   return (name || 'project').toLowerCase().replace(/[^a-z0-9]+/g, '_');
 }
 
+function _csvEscape(v) {
+  if (v == null) return '';
+  const s = String(v);
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
 // ── CSV export ────────────────────────────────────────────────────────────
+// Identity columns are uppercase to match common GIS conventions (PLOTID,
+// LAT, LON). project_name and saved_at are intentionally excluded — the
+// project name is in the filename, and the timestamp is not useful in the
+// per-row results table.
+const CSV_COLUMNS = [
+  ['PLOTID',      p => p.id],
+  ['LAT',         p => p.lat],
+  ['LON',         p => p.lon],
+  ['ref_code',    p => p.refCode ?? ''],
+  ['ref_label',   p => p.refLabel ?? ''],
+  ['class_code',  p => p.resultCode ?? ''],
+  ['class_label', p => p.resultLabel ?? ''],
+  ['confidence',  p => p.confidence ?? ''],
+  ['notes',       p => p.notes ?? ''],
+];
+
 export function exportCSV() {
-  const { project, plots } = state;
+  const { plots } = state;
   if (!plots.length) return;
-  const pName = project?.name || 'demo';
 
-  const headers = 'project_name,PLOTID,LAT,LON,ref_code,ref_label,classified_code,classified_label,confidence,notes';
-  const rows = plots.map(p => {
-    const r = project?.results?.[p.id] || {};
-    return [
-      `"${pName}"`, p.id, p.lat, p.lon,
-      p.refCode ?? '', p.refLabel ?? '',
-      r.code ?? '', r.label ?? '',
-      r.confidence ?? '', `"${(r.notes || '').replace(/"/g, '""')}"`,
-    ].join(',');
-  });
+  const header = CSV_COLUMNS.map(([h]) => h).join(',');
+  const rows   = plots.map(p => CSV_COLUMNS.map(([, get]) => _csvEscape(get(p))).join(','));
 
-  _download([headers, ...rows].join('\n'), `${_safeName(pName)}_results.csv`, 'text/csv');
+  const filename = `${_safeName(state.project?.name)}_results.csv`;
+  // Prepend UTF-8 BOM so Excel opens non-ASCII characters correctly.
+  _download('﻿' + [header, ...rows].join('\n'), filename, 'text/csv;charset=utf-8');
 }
 
 // ── GeoJSON export ────────────────────────────────────────────────────────
-export function exportGeoJSON() {
-  const { project, plots } = state;
-  if (!plots.length) return;
-  const pName = project?.name || 'demo';
+// GeoJSON properties keep snake_case lowercase, including project_name and
+// saved_at — programmatic consumers benefit from that metadata.
+function _geoJsonProps(plot) {
+  return {
+    plot_id:      plot.id,
+    lat:          plot.lat,
+    lon:          plot.lon,
+    ref_code:     plot.refCode ?? '',
+    ref_label:    plot.refLabel ?? '',
+    class_code:   plot.resultCode ?? '',
+    class_label:  plot.resultLabel ?? '',
+    confidence:   plot.confidence ?? '',
+    notes:        plot.notes ?? '',
+    project_name: state.project?.name || '',
+    saved_at:     state.project?.results?.[plot.id]?.savedAt ?? '',
+  };
+}
 
-  const features = plots.map(p => {
-    const r = project?.results?.[p.id] || {};
-    return {
-      type: 'Feature',
-      geometry: p.geometry || { type:'Point', coordinates:[p.lon, p.lat] },
-      properties: {
-        plotId: p.id, lat: p.lat, lon: p.lon,
-        refCode: p.refCode, refLabel: p.refLabel,
-        classifiedCode: r.code ?? null, classifiedLabel: r.label ?? null,
-        confidence: r.confidence ?? null, notes: r.notes ?? null,
-        savedAt: r.savedAt ?? null,
-        ...p.meta,
-      },
-    };
-  });
+export function exportGeoJSON() {
+  const { plots } = state;
+  if (!plots.length) return;
+  const pName = state.project?.name || 'demo';
+
+  const features = plots.map(p => ({
+    type: 'Feature',
+    geometry: p.geometry || { type: 'Point', coordinates: [p.lon, p.lat] },
+    properties: { ..._geoJsonProps(p), ...(p.meta || {}) },
+  }));
 
   _download(
-    JSON.stringify({ type:'FeatureCollection', name: pName, features }, null, 2),
+    JSON.stringify({ type: 'FeatureCollection', name: pName, features }, null, 2),
     `${_safeName(pName)}_results.geojson`,
     'application/geo+json'
   );

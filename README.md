@@ -4,13 +4,13 @@
 
 A self-hosted web app for satellite image interpretation and land-cover validation. Built as a lighter, faster alternative to Collect Earth Online with multi-source high-resolution imagery, dynamic class schemas, and GIS file support.
 
-> **v2 is a full rewrite.** The single-file `molca_validator.html` is preserved for reference, but the running app is now a proper Express + ES-modules web app with a backend, persistent project files on disk, and server-side API key management.
+> **v2 is a full rewrite.** A proper Express + ES-modules web app with a backend, persistent project files on disk, and server-side API key management.
 
 ---
 
 ## Features
 
-- **Multi-source basemaps** — Google Satellite, ESRI World Imagery (latest + Wayback 2024/2019), Bing, Sentinel-2 cloudless (2018–2024), Planet PlanetScope (monthly mosaics 2016–2026)
+- **Multi-source basemaps** — Google Satellite, ESRI World Imagery (latest + Wayback year-end snapshots 2018–2025, no API key required), Bing, Sentinel-2 cloudless (2018–2024), Planet PlanetScope (monthly mosaics 2016–2026)
 - **Dual map / split view** — Compare two basemaps side-by-side with synced pan/zoom
 - **Dynamic classification schemas** — 10 built-in real-world LULC presets (MOLCA, CORINE, IGBP/MODIS, ESA CCI, NLCD, IPCC, Anderson/USGS, FROM-GLC, Binary, Custom). Each project carries its own schema; edit, add, delete classes with color picker and keyboard shortcuts.
 - **GIS import** — `.csv` · `.geojson` · `.kml` · `.kmz` · Shapefile (`.zip`). Points and Polygons supported; polygon centroids used for navigation, full geometry drawn on the map.
@@ -19,7 +19,7 @@ A self-hosted web app for satellite image interpretation and land-cover validati
 - **Auto-save** — Every classification result persists immediately via incremental PATCH to the backend.
 - **Multiple export formats** — CSV (flat results) and GeoJSON (with original geometry preserved).
 - **Google Earth Pro sync** — Live KML feed at `/kml/current.kml` auto-flies Google Earth Pro to the current plot.
-- **Keyboard shortcuts** — Rapid classification with per-class hotkeys, confidence levels (`h`/`m`/`l`), `Enter` to submit, arrow keys to navigate.
+- **Keyboard shortcuts** — Rapid classification with per-class hotkeys, confidence levels (`h`/`m`/`l`), `Enter` or `Space` to submit, arrow keys to navigate.
 
 ---
 

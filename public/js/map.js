@@ -26,8 +26,19 @@ export function getTileLayer(name, p1, p2) {
     return L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', { maxZoom:21, attribution:'© Google' });
 
   if (name === 'esri') {
-    if (p1 === '2024') return L.tileLayer('/api/tiles/esri-wayback/16453/{z}/{y}/{x}', { maxZoom:19, attribution:'© Esri Wayback Dec 2024' });
-    if (p1 === '2019') return L.tileLayer('/api/tiles/esri-wayback/4756/{z}/{y}/{x}',  { maxZoom:19, attribution:'© Esri Wayback Dec 2019' });
+    // Year-end Wayback snapshots (release ID → date). Public — no API key needed.
+    const wayback = {
+      '2018': { id: 23448, date: 'Dec 2018' },
+      '2019': { id: 4756,  date: 'Dec 2019' },
+      '2020': { id: 29260, date: 'Dec 2020' },
+      '2021': { id: 26120, date: 'Dec 2021' },
+      '2022': { id: 45134, date: 'Dec 2022' },
+      '2023': { id: 56102, date: 'Dec 2023' },
+      '2024': { id: 16453, date: 'Dec 2024' },
+      '2025': { id: 13192, date: 'Dec 2025' },
+    };
+    const wb = wayback[p1];
+    if (wb) return L.tileLayer(`/api/tiles/esri-wayback/${wb.id}/{z}/{y}/{x}`, { maxZoom:19, attribution:`© Esri Wayback ${wb.date}` });
     return L.tileLayer('/api/tiles/esri-world/{z}/{y}/{x}', { maxZoom:19, attribution:'© Esri' });
   }
 

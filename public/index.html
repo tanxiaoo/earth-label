@@ -73,13 +73,9 @@
       <button class="basemap-btn" onclick="app.clearKey('planet')" title="Clear key">✕</button>
     </div>
 
-    <label class="field-label" style="margin-top:12px;">ESRI / ArcGIS API Key
-      <span id="esriKeyStatus" class="key-status"></span>
-    </label>
-    <div style="display:flex;gap:8px;">
-      <input type="password" id="esriApiKey" placeholder="Enter key to update…" class="field-input" style="flex:1;">
-      <button class="basemap-btn" onclick="app.clearKey('esri')" title="Clear key">✕</button>
-    </div>
+    <p style="font-size:11px;color:var(--text-dim);margin-top:14px;line-height:1.5;">
+      Esri / ArcGIS Wayback and World Imagery are public layers — no API key required.
+    </p>
 
     <div id="settingsMsg" class="error-msg hidden" style="margin-top:10px;"></div>
 
@@ -115,6 +111,7 @@
 
     <div class="modal-actions" style="margin-top:12px;">
       <button class="basemap-btn" onclick="app.closeClassEditor()">Cancel</button>
+      <button class="basemap-btn" onclick="app.saveSchemaAsPreset()" title="Save this schema as a reusable preset">★ Save as Preset</button>
       <button class="submit-btn" style="padding:8px 20px;width:auto;" onclick="app.saveClassSchema()">Save Schema</button>
     </div>
   </div>
@@ -185,8 +182,14 @@
       <button class="basemap-btn"        onclick="app.switchBasemap('esri')"      id="btn-esri">ESRI</button>
       <select id="esri-year"    class="basemap-btn" style="display:none;" onchange="app.updateEsriYear()">
         <option value="latest" selected>Latest</option>
+        <option value="2025">2025</option>
         <option value="2024">2024</option>
+        <option value="2023">2023</option>
+        <option value="2022">2022</option>
+        <option value="2021">2021</option>
+        <option value="2020">2020</option>
         <option value="2019">2019</option>
+        <option value="2018">2018</option>
       </select>
       <button class="basemap-btn" onclick="app.switchBasemap('bing')"       id="btn-bing">Bing</button>
       <button class="basemap-btn" onclick="app.switchBasemap('sentinel2')"  id="btn-sentinel2">Sentinel-2</button>
@@ -212,7 +215,12 @@
     </div>
     <button class="nav-btn prev" onclick="app.prevPlot()">← Prev</button>
     <button class="nav-btn next" onclick="app.nextPlot()">Next →</button>
-    <button class="nav-btn" id="btn-ge" onclick="app.openGoogleEarth()" disabled style="background:#2a2d3a;color:var(--text);">🌍 GE Pro</button>
+    <button class="nav-btn" id="btn-ge" onclick="app.openGoogleEarth()" disabled title="Open this plot in Google Earth Web (new tab)" style="background:#2a2d3a;color:var(--text);">🌍 Google Earth</button>
+    <div class="ge-range" title="Camera distance (meters) for Google Earth Pro live sync and the Google Earth Web button. Drag to adjust.">
+      <input type="range" id="geRangeSlider" min="50" max="5000" step="50" value="1000"
+             oninput="app.onGeRangeInput(this.value)">
+      <span id="geRangeLabel" class="ge-range-label">1000 m</span>
+    </div>
     <div class="plot-counter" id="plotCounter">–</div>
   </div>
 
@@ -223,7 +231,10 @@
         <button class="mini-btn active" data-side="left" data-layer="google" onclick="app.setMapLayer('left','google')">Google</button>
         <button class="mini-btn" data-side="left" data-layer="esri" onclick="app.setMapLayer('left','esri')">ESRI</button>
         <select id="esri-year-left" class="mini-select" style="display:none;" onchange="app.setMapLayer('left','esri')">
-          <option value="latest" selected>Latest</option><option value="2024">2024</option><option value="2019">2019</option>
+          <option value="latest" selected>Latest</option>
+          <option value="2025">2025</option><option value="2024">2024</option><option value="2023">2023</option>
+          <option value="2022">2022</option><option value="2021">2021</option><option value="2020">2020</option>
+          <option value="2019">2019</option><option value="2018">2018</option>
         </select>
         <button class="mini-btn" data-side="left" data-layer="bing" onclick="app.setMapLayer('left','bing')">Bing</button>
         <button class="mini-btn" data-side="left" data-layer="sentinel2" onclick="app.setMapLayer('left','sentinel2')">S-2</button>
@@ -256,7 +267,10 @@
         <button class="mini-btn" data-side="right" data-layer="google" onclick="app.setMapLayer('right','google')">Google</button>
         <button class="mini-btn" data-side="right" data-layer="esri" onclick="app.setMapLayer('right','esri')">ESRI</button>
         <select id="esri-year-right" class="mini-select" style="display:none;" onchange="app.setMapLayer('right','esri')">
-          <option value="latest" selected>Latest</option><option value="2024">2024</option><option value="2019">2019</option>
+          <option value="latest" selected>Latest</option>
+          <option value="2025">2025</option><option value="2024">2024</option><option value="2023">2023</option>
+          <option value="2022">2022</option><option value="2021">2021</option><option value="2020">2020</option>
+          <option value="2019">2019</option><option value="2018">2018</option>
         </select>
         <button class="mini-btn" data-side="right" data-layer="bing" onclick="app.setMapLayer('right','bing')">Bing</button>
         <button class="mini-btn active" data-side="right" data-layer="sentinel2" onclick="app.setMapLayer('right','sentinel2')">S-2</button>

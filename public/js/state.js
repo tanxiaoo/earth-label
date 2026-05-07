@@ -10,9 +10,8 @@ export const state = {
   leftBasemap:      'google',
   rightBasemap:     'sentinel2',
   isFirstPlotLoad:  true,
-  googleEarthActive: false,
-  geWindowRef:      null,
   presets:          [],     // cached from /api/presets
+  geRange:          Number(localStorage.getItem('geRange')) || 1000,  // meters; GE Pro + GE Web zoom distance
 };
 
 export function setState(updates) {

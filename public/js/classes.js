@@ -99,10 +99,7 @@ export function addEditorClass() {
   _renderEditorList();
 }
 
-export async function saveClassSchema() {
-  if (!state.project) return;
-  // Collect current values from DOM before reading _editingSchema
-  // (onchange may not fire if user just saved; read inputs directly)
+function _syncEditorFromDOM() {
   const rows = document.querySelectorAll('#classEditorList .class-editor-row');
   rows.forEach((row, i) => {
     if (!_editingSchema[i]) return;
@@ -111,11 +108,48 @@ export async function saveClassSchema() {
     _editingSchema[i].label = row.querySelectorAll('input[type=text]')[1].value || 'Class';
     _editingSchema[i].key   = row.querySelectorAll('input[type=text]')[2].value || '';
   });
+}
+
+export async function saveClassSchema() {
+  if (!state.project) return;
+  // Read current input values (onchange may not have fired if focus is still in a field)
+  _syncEditorFromDOM();
 
   await api.saveClassSchema(state.project.id, _editingSchema);
   setState({ project: { ...state.project, classSchema: _editingSchema } });
   renderClassButtons();
   closeClassEditor();
+}
+
+// Save the current schema as a reusable preset (so it can be applied to
+// other projects). Prompts for a name; refreshes the preset dropdowns on
+// success.
+export async function saveSchemaAsPreset() {
+  _syncEditorFromDOM();
+  if (!_editingSchema.length) { alert('Add at least one class before saving a preset.'); return; }
+  const name = (prompt('Save preset as (name):') || '').trim();
+  if (!name) return;
+  try {
+    await api.savePreset(name, _editingSchema, `Saved from project: ${state.project?.name || ''}`);
+    const presets = await api.listPresets();
+    setState({ presets });
+    _populateEditorPresets();
+    // Also refresh the create-project preset selector if it exists.
+    const createSel = document.getElementById('presetSelect');
+    if (createSel) {
+      const cur = createSel.value;
+      createSel.innerHTML = '';
+      presets.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.id; opt.textContent = p.name;
+        createSel.appendChild(opt);
+      });
+      if (cur) createSel.value = cur;
+    }
+    alert(`Preset "${name}" saved. It now appears in the preset selector for new projects.`);
+  } catch (e) {
+    alert(`Could not save preset: ${e.message}`);
+  }
 }
 
 // ── Import/export class schema as CSV ─────────────────────────────────────

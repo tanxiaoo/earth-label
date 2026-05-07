@@ -1,10 +1,17 @@
 // Server-side tile proxy — API keys never reach the browser
 const router = require('express').Router();
 const https = require('https');
+const { URL } = require('url');
 const { readEnv } = require('../lib/env-manager');
 
-function proxyTile(url, res) {
+// Follow up to 3 redirects (Wayback returns 301 to the actual tile host).
+function proxyTile(url, res, depth = 0) {
   https.get(url, (upstream) => {
+    if ([301, 302, 307, 308].includes(upstream.statusCode) && upstream.headers.location && depth < 3) {
+      const next = new URL(upstream.headers.location, url).toString();
+      upstream.resume();
+      return proxyTile(next, res, depth + 1);
+    }
     res.set('Content-Type', upstream.headers['content-type'] || 'image/jpeg');
     res.set('Cache-Control', 'public, max-age=86400');
     upstream.pipe(res);
@@ -24,17 +31,18 @@ router.get('/planet/:period/:z/:x/:y', (req, res) => {
 });
 
 // GET /api/tiles/esri-wayback/:release/:z/:y/:x
+// Wayback is a public service — no token required.
 router.get('/esri-wayback/:release/:z/:y/:x', (req, res) => {
-  const key = readEnv().ESRI_API_KEY;
   const { release, z, y, x } = req.params;
-  const token = key ? `?token=${key}` : '';
   proxyTile(
-    `https://wayback.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/WMTS/1.0.0/default028mm/MapServer/tile/${release}/${z}/${y}/${x}${token}`,
+    `https://wayback.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/WMTS/1.0.0/default028mm/MapServer/tile/${release}/${z}/${y}/${x}`,
     res
   );
 });
 
 // GET /api/tiles/esri-world/:z/:y/:x
+// World Imagery basemap is also public; only attach a token if one is set
+// (some org-specific tiles benefit from auth, but it is not required).
 router.get('/esri-world/:z/:y/:x', (req, res) => {
   const key = readEnv().ESRI_API_KEY;
   const { z, y, x } = req.params;

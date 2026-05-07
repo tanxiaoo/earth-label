@@ -14,6 +14,10 @@ export const deleteKeys    = (body)   => fetch('/api/keys', { method:'DELETE', h
 // Presets
 export const listPresets   = ()       => fetch('/api/presets').then(_json);
 export const getPreset     = (id)     => fetch(`/api/presets/${id}`).then(_json);
+export const savePreset    = (name, classes, description) =>
+  fetch('/api/presets', { method:'POST', headers:{'Content-Type':'application/json'},
+                          body: JSON.stringify({ name, classes, description }) }).then(_json);
+export const deletePreset  = (id)     => fetch(`/api/presets/${id}`, { method:'DELETE' }).then(_json);
 
 // Projects
 export const listProjects  = ()       => fetch('/api/projects').then(_json);
@@ -51,6 +55,11 @@ export async function importProject(file) {
 
 export const exportProjectUrl = (id) => `/api/projects/${id}/export`;
 
-// KML update (Google Earth Pro)
-export const updateKML = (lat, lon, id, label) =>
-  fetch('/kml/update', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ lat, lon, id, label }) }).catch(() => {});
+// KML update (Google Earth Pro). `range` is meters from camera to point.
+export const updateKML = (lat, lon, id, label, range) =>
+  fetch('/kml/update', { method:'POST', headers:{'Content-Type':'application/json'},
+                          body: JSON.stringify({ lat, lon, id, label, range }) }).catch(() => {});
+
+export const updateKMLRange = (range) =>
+  fetch('/kml/update', { method:'POST', headers:{'Content-Type':'application/json'},
+                          body: JSON.stringify({ range }) }).catch(() => {});
