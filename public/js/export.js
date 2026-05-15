@@ -25,7 +25,7 @@ function _csvEscape(v) {
 // LAT, LON). project_name and saved_at are intentionally excluded — the
 // project name is in the filename, and the timestamp is not useful in the
 // per-row results table.
-const CSV_COLUMNS = [
+const FIXED_CSV_COLUMNS = [
   ['PLOTID',      p => p.id],
   ['LAT',         p => p.lat],
   ['LON',         p => p.lon],
@@ -34,15 +34,51 @@ const CSV_COLUMNS = [
   ['class_code',  p => p.resultCode ?? ''],
   ['class_label', p => p.resultLabel ?? ''],
   ['confidence',  p => p.confidence ?? ''],
-  ['notes',       p => p.notes ?? ''],
 ];
+
+// Per-project annotation fields default to a single text field named `notes`
+// when the project doesn't define any — matches pre-feature behavior.
+const DEFAULT_ANNO_FIELDS = [{ key: 'notes', label: 'Notes', type: 'text' }];
+function _annoFields() {
+  const f = state.project?.annotationFields;
+  return (Array.isArray(f) && f.length) ? f : DEFAULT_ANNO_FIELDS;
+}
+
+// Read an annotation value from a plot, falling back to legacy top-level
+// `notes` so projects saved before annotationFields existed still export.
+function _annoValue(plot, key) {
+  return plot.annotations?.[key] ?? (key === 'notes' ? plot.notes ?? '' : '');
+}
 
 export function exportCSV() {
   const { plots } = state;
   if (!plots.length) return;
 
-  const header = CSV_COLUMNS.map(([h]) => h).join(',');
-  const rows   = plots.map(p => CSV_COLUMNS.map(([, get]) => _csvEscape(get(p))).join(','));
+  const annoFields = _annoFields();
+
+  // Union of meta keys across all plots, preserving first-seen order — keeps
+  // upload columns like Tile_ID, source, sample_id, molca_class_2024 round-
+  // trippable through CSV. Appended at the tail so the fixed columns and
+  // annotation columns stay in stable positions.
+  const metaKeys = [];
+  const seen = new Set();
+  for (const p of plots) {
+    for (const k of Object.keys(p.meta || {})) {
+      if (!seen.has(k)) { seen.add(k); metaKeys.push(k); }
+    }
+  }
+
+  const header = [
+    ...FIXED_CSV_COLUMNS.map(([h]) => h),
+    ...annoFields.map(f => f.key),
+    ...metaKeys,
+  ].join(',');
+
+  const rows = plots.map(p => [
+    ...FIXED_CSV_COLUMNS.map(([, get]) => _csvEscape(get(p))),
+    ...annoFields.map(f => _csvEscape(_annoValue(p, f.key))),
+    ...metaKeys.map(k => _csvEscape(p.meta?.[k])),
+  ].join(','));
 
   const filename = `${_safeName(state.project?.name)}_results.csv`;
   // Prepend UTF-8 BOM so Excel opens non-ASCII characters correctly.
@@ -53,6 +89,9 @@ export function exportCSV() {
 // GeoJSON properties keep snake_case lowercase, including project_name and
 // saved_at — programmatic consumers benefit from that metadata.
 function _geoJsonProps(plot) {
+  const annoFields = _annoFields();
+  const annoProps = {};
+  for (const f of annoFields) annoProps[f.key] = _annoValue(plot, f.key);
   return {
     plot_id:      plot.id,
     lat:          plot.lat,
@@ -62,7 +101,7 @@ function _geoJsonProps(plot) {
     class_code:   plot.resultCode ?? '',
     class_label:  plot.resultLabel ?? '',
     confidence:   plot.confidence ?? '',
-    notes:        plot.notes ?? '',
+    ...annoProps,
     project_name: state.project?.name || '',
     saved_at:     state.project?.results?.[plot.id]?.savedAt ?? '',
   };

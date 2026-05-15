@@ -63,3 +63,14 @@ export const updateKML = (lat, lon, id, label, range) =>
 export const updateKMLRange = (range) =>
   fetch('/kml/update', { method:'POST', headers:{'Content-Type':'application/json'},
                           body: JSON.stringify({ range }) }).catch(() => {});
+
+// NDVI — Sentinel Hub monthly time series for a point
+export const getNdviMonthly = (lat, lon, year = 2025) =>
+  fetch('/api/ndvi/monthly', { method:'POST', headers:{'Content-Type':'application/json'},
+                                body: JSON.stringify({ lat, lon, year }) }).then(_json);
+
+export const saveNdviCache = (projectId, plotId, year, months) =>
+  updateProject(projectId, {
+    ndviCacheUpdate: { plotId, year, months },
+    lastUsed: new Date().toISOString(),
+  });

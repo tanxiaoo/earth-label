@@ -77,6 +77,25 @@
       Esri / ArcGIS Wayback and World Imagery are public layers — no API key required.
     </p>
 
+    <label class="field-label" style="margin-top:14px;">Sentinel Hub Client ID
+      <span id="shIdStatus" class="key-status"></span>
+    </label>
+    <div style="display:flex;gap:8px;">
+      <input type="password" id="shClientId" placeholder="Enter Client ID…" class="field-input" style="flex:1;">
+      <button class="basemap-btn" onclick="app.clearKey('sentinel_hub_id')" title="Clear Client ID">✕</button>
+    </div>
+
+    <label class="field-label" style="margin-top:10px;">Sentinel Hub Client Secret
+      <span id="shSecretStatus" class="key-status"></span>
+    </label>
+    <div style="display:flex;gap:8px;">
+      <input type="password" id="shClientSecret" placeholder="Enter Client Secret…" class="field-input" style="flex:1;">
+      <button class="basemap-btn" onclick="app.clearKey('sentinel_hub_secret')" title="Clear Client Secret">✕</button>
+    </div>
+    <p style="font-size:11px;color:var(--text-dim);margin-top:8px;line-height:1.5;">
+      Required only for the NDVI panel. Create an OAuth client at the Sentinel Hub dashboard.
+    </p>
+
     <div id="settingsMsg" class="error-msg hidden" style="margin-top:10px;"></div>
 
     <div class="modal-actions" style="margin-top:16px;">
@@ -113,6 +132,29 @@
       <button class="basemap-btn" onclick="app.closeClassEditor()">Cancel</button>
       <button class="basemap-btn" onclick="app.saveSchemaAsPreset()" title="Save this schema as a reusable preset">★ Save as Preset</button>
       <button class="submit-btn" style="padding:8px 20px;width:auto;" onclick="app.saveClassSchema()">Save Schema</button>
+    </div>
+  </div>
+</div>
+
+<!-- ANNOTATION FIELDS EDITOR -->
+<div id="annotationFieldsEditorModal" class="modal-overlay hidden">
+  <div class="modal-content" style="max-width:560px;width:90vw;max-height:90vh;display:flex;flex-direction:column;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <h3 style="margin:0;">Edit Annotation Fields</h3>
+    </div>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:10px;line-height:1.5;">
+      Each field becomes one column in the CSV/GeoJSON export. Keys must be lowercase snake_case (a–z, 0–9, _) and unique. Renaming or deleting a field with existing data does not migrate or restore values.
+    </div>
+
+    <div id="annotationFieldsEditorList" style="flex:1;overflow-y:auto;margin-bottom:12px;"></div>
+
+    <button class="basemap-btn" style="width:100%;padding:10px;border-style:dashed;" onclick="app.addAnnotationField()">+ Add Field</button>
+
+    <div id="annotationFieldsEditorError" class="hidden" style="color:#ef4444;font-size:12px;margin-top:8px;"></div>
+
+    <div class="modal-actions" style="margin-top:12px;">
+      <button class="basemap-btn" onclick="app.closeAnnotationFieldsEditor()">Cancel</button>
+      <button class="submit-btn" style="padding:8px 20px;width:auto;" onclick="app.saveAnnotationFields()">Save Fields</button>
     </div>
   </div>
 </div>
@@ -213,6 +255,8 @@
       </select>
       <div class="toolbar-separator"></div>
     </div>
+    <button class="basemap-btn" id="btn-ndvi" onclick="app.toggleNdviPanel()" title="Toggle the floating NDVI time-series panel" aria-label="Toggle NDVI panel"><span class="ndvi-icon" aria-hidden="true"></span>NDVI</button>
+    <div class="toolbar-separator"></div>
     <button class="nav-btn prev" onclick="app.prevPlot()">← Prev</button>
     <button class="nav-btn next" onclick="app.nextPlot()">Next →</button>
     <button class="nav-btn" id="btn-ge" onclick="app.openGoogleEarth()" disabled title="Open this plot in Google Earth Web (new tab)" style="background:#2a2d3a;color:var(--text);">🌍 Google Earth</button>
@@ -321,8 +365,11 @@
   </div>
 
   <div class="notes-section">
-    <label style="font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:6px;">Notes</label>
-    <textarea id="notesInput" placeholder="Optional notes…"></textarea>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+      <label style="font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px;">Annotations</label>
+      <button class="icon-btn" onclick="app.openAnnotationFieldsEditor()" title="Edit annotation fields">✏</button>
+    </div>
+    <div id="annotationsContainer"></div>
   </div>
 
   <div class="submit-section">
@@ -337,6 +384,72 @@
 <!-- hidden file inputs for project import -->
 <input type="file" id="importProjectInput" accept=".json" style="display:none" onchange="app.onImportProjectFile(event)">
 
+<!-- ═══════════════════════════════════════════════ FLOATING NDVI PANEL ════ -->
+<div id="ndviPanel" class="ndvi-panel hidden" role="dialog" aria-label="NDVI time series">
+  <div class="ndvi-header" id="ndviHeader">
+    <span class="ndvi-title"><span class="ndvi-icon" aria-hidden="true"></span>NDVI<span class="ndvi-source" title="Monthly mean NDVI from Sentinel-2 L2A (10 m), queried via the Sentinel Hub Statistical API. Cloud-masked; missing months indicate no valid observations.">Sentinel-2 · monthly mean</span></span>
+    <div class="ndvi-header-controls">
+      <select id="ndviYear" class="ndvi-year-select" title="Year" onchange="app.onNdviYearChange()"></select>
+      <button class="icon-btn" id="ndviRefreshBtn" onclick="app.refreshNdvi()" title="Re-fetch (overwrites cache)">↻</button>
+      <button class="icon-btn" onclick="app.closeNdviPanel()" title="Close">✕</button>
+    </div>
+  </div>
+  <div class="ndvi-body">
+    <div class="ndvi-left">
+      <div class="ndvi-status-row">
+        <div id="ndviStatus" class="ndvi-status">Open a plot to begin.</div>
+        <span class="ndvi-guide-hint">Interpretation guide</span>
+        <button class="ndvi-guide-toggle" id="ndviGuideToggleBtn" onclick="app.toggleNdviGuide()" title="Show / hide the class reference guide" aria-label="Toggle interpretation guide">▶</button>
+      </div>
+      <div class="ndvi-chart-wrap">
+        <canvas id="ndviChart"></canvas>
+      </div>
+      <div class="ndvi-actions">
+        <button class="submit-btn ndvi-fetch-btn" id="ndviFetchBtn" onclick="app.fetchNdvi()">Fetch NDVI</button>
+      </div>
+    </div>
+    <div class="ndvi-split-handle" id="ndviSplitHandle" title="Drag to resize"></div>
+    <div class="ndvi-right">
+      <div class="ndvi-guide" id="ndviGuide">
+        <div class="ndvi-guide-summary">Interpretation guide — class reference</div>
+        <div class="ndvi-guide-hint">Edit NDVI range and curve shape per class. Saved with this project.</div>
+        <table id="ndviGuideTable" class="ndvi-guide-table">
+          <colgroup>
+            <col class="ndvi-col-class">
+            <col class="ndvi-col-range">
+            <col class="ndvi-col-pattern">
+          </colgroup>
+          <thead>
+            <tr>
+              <th>Class<span class="ndvi-col-resize" data-col="class"></span></th>
+              <th>NDVI range<span class="ndvi-col-resize" data-col="range"></span></th>
+              <th>Curve shape</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+        <div class="ndvi-guide-actions">
+          <button class="basemap-btn" id="ndviGuideSaveBtn" onclick="app.saveNdviGuide()">Save guide</button>
+          <button class="basemap-btn" id="ndviGuideResetAllBtn" onclick="app.resetNdviGuide()" title="Reset every row to the scheme's default NDVI range and curve shape">Reset all to defaults</button>
+          <span id="ndviGuideMsg" class="ndvi-guide-msg"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- Eight resize zones (4 edges + 4 corners). Transparent overlays driven by
+       initResize() in ndvi-panel.js; the visible diagonal grip below is also
+       wired to the same driver with direction="se". -->
+  <div class="ndvi-edge ndvi-edge-n" data-resize="n"></div>
+  <div class="ndvi-edge ndvi-edge-s" data-resize="s"></div>
+  <div class="ndvi-edge ndvi-edge-e" data-resize="e"></div>
+  <div class="ndvi-edge ndvi-edge-w" data-resize="w"></div>
+  <div class="ndvi-corner ndvi-corner-ne" data-resize="ne"></div>
+  <div class="ndvi-corner ndvi-corner-nw" data-resize="nw"></div>
+  <div class="ndvi-corner ndvi-corner-sw" data-resize="sw"></div>
+  <div class="ndvi-resize-handle ndvi-corner-se" id="ndviResizeHandle" data-resize="se" title="Drag to resize"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script type="module" src="/js/app.js"></script>
 </body>
 </html>

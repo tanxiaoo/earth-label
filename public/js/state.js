@@ -12,6 +12,7 @@ export const state = {
   isFirstPlotLoad:  true,
   presets:          [],     // cached from /api/presets
   geRange:          Number(localStorage.getItem('geRange')) || 1000,  // meters; GE Pro + GE Web zoom distance
+  ndviPanelOpen:    false,  // floating NDVI panel visibility (no API calls when false)
 };
 
 export function setState(updates) {

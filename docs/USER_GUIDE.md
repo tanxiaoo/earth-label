@@ -104,7 +104,7 @@ After creation, you can edit the schema at any time via the **✏** icon in the 
 - **Reference: …** — shows the original class from the input file (color-coded if it matches the current schema). Once you've classified the plot, a second line **Your label: …** appears with your chosen class.
 - **Class buttons** — one per class in the current schema; keyboard shortcut shown on the right
 - **Confidence** — High / Medium / Low
-- **Notes** — optional free-text
+- **Annotations** — per-project custom fields. By default a single text field named "Notes"; click the **✏** next to "Annotations" to rename it, change its type, or add more fields (see section 7b)
 - **Submit & Next →** — saves and auto-advances to the next pending plot (`Enter` or `Space`)
 - **↓ CSV / ↓ GeoJSON** — export results in either format. Re-classifying a previous plot is reflected in the next export.
 
@@ -120,7 +120,7 @@ The standard workflow:
 4. Examine the imagery (switch basemaps or use split view to compare)
 5. Click a class button or press its keyboard shortcut
 6. Set confidence: `h` / `m` / `l`
-7. Optional notes
+7. Fill in any annotation fields (text, yes/no toggles — see section 7b for how to configure)
 8. **Enter** or click **Submit & Next →**
 
 The plot is marked **Done** in the list and the next pending plot loads automatically.
@@ -152,6 +152,27 @@ The schema is saved on the server in the project file. Existing classifications 
 
 ---
 
+## 7b. Editing Annotation Fields
+
+Each project has its own **annotation fields** — the per-plot inputs that appear below "Confidence" in the right panel. By default a project has one field: a free-text "Notes" textarea. You can rename it, change its type, or add more fields.
+
+Click the **✏** icon next to the "Annotations" header.
+
+In the editor:
+- **Add Field** — append a new row
+- For each field, edit:
+  - **Key** — the column name used in the CSV / GeoJSON export. Must be lowercase snake_case (letters, digits, underscore; start with a letter; max 31 chars). Must be unique within the project and must not collide with built-in columns (`PLOTID, LAT, LON, ref_code, ref_label, class_code, class_label, confidence`) or with a column from your uploaded data file
+  - **Label** — what the user sees in the right panel
+  - **Type** — `Text` (free-form textarea) or `Yes / No` (two-button toggle, stored as `yes`, `no`, or empty)
+- **✕** — delete a row (with confirmation if the field has stored values)
+- **Save Fields** — persist to the project
+
+**On renaming or deleting fields with stored data:** existing values are NOT migrated. The values stay in the project JSON on disk (recoverable by hand) but no longer appear in the UI or in exports. The editor warns you before letting you save such a change.
+
+Each field appears as one column in the CSV export (in the order shown in the editor) and as one property per feature in the GeoJSON export.
+
+---
+
 ## 8. Google Earth Integration
 
 There are two independent options.
@@ -178,9 +199,9 @@ Three buttons in the right panel:
 
 | Button         | Output |
 |----------------|--------|
-| **↓ CSV**      | Flat CSV with `PLOTID, LAT, LON, ref_code, ref_label, class_code, class_label, confidence, notes`. UTF-8 BOM prepended so Excel handles non-ASCII names. |
-| **↓ GeoJSON**  | FeatureCollection with original geometry preserved (point or polygon) and snake-case canonical properties (`plot_id, lat, lon, ref_code, ref_label, class_code, class_label, confidence, notes, project_name, saved_at`) plus any unknown columns from the upload |
-| **↓** (sidebar) | Full project as `.json` — includes plots, results, schema. Re-importable. |
+| **↓ CSV**      | Flat CSV with the eight fixed columns `PLOTID, LAT, LON, ref_code, ref_label, class_code, class_label, confidence`, followed by one column per annotation field (default: `notes`; see section 7b), followed by any unknown columns from your input upload. UTF-8 BOM prepended so Excel handles non-ASCII names. |
+| **↓ GeoJSON**  | FeatureCollection with original geometry preserved (point or polygon) and snake-case canonical properties (`plot_id, lat, lon, ref_code, ref_label, class_code, class_label, confidence`), one property per annotation field, plus `project_name, saved_at`, plus any unknown columns from the upload |
+| **↓** (sidebar) | Full project as `.json` — includes plots, results, schema, annotation-field definitions. Re-importable. |
 
 Both CSV and GeoJSON read from live in-memory state, so re-classifying a previous plot is reflected on the **next** download immediately.
 

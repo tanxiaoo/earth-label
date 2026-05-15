@@ -41,12 +41,13 @@ earth-label/
 │   ├── index.html
 │   ├── css/app.css
 │   └── js/                      ES modules
-│       ├── api.js               fetch() wrappers
-│       ├── state.js             single mutable state object
-│       ├── map.js               Leaflet dual-map, tile layers, navigation
-│       ├── classes.js           class-button rendering + class editor modal
-│       ├── export.js            CSV / GeoJSON / project-file export
-│       └── app.js               main entry, orchestration, keyboard shortcuts
+│       ├── api.js                fetch() wrappers
+│       ├── state.js              single mutable state object
+│       ├── map.js                Leaflet dual-map, tile layers, navigation
+│       ├── classes.js            class-button rendering + class editor modal
+│       ├── annotation-fields.js  annotation-field sidebar inputs + editor modal
+│       ├── export.js             CSV / GeoJSON / project-file export
+│       └── app.js                main entry, orchestration, keyboard shortcuts
 └── data/projects/               (gitignored) one .json file per project
 ```
 
@@ -69,7 +70,7 @@ A single mutable object in `public/js/state.js`:
 
 ```js
 export const state = {
-  project:          null,    // full project from server, with classSchema, plots, results
+  project:          null,    // full project from server, with classSchema, annotationFields, plots, results
   plots:            [],      // project.plots merged with current results
   currentIndex:     -1,      // index into state.plots
   selectedClass:    null,    // currently chosen class code
@@ -120,6 +121,10 @@ A project file in `data/projects/<id>.json`:
     { "code": 20, "label": "Forest", "color": "#548235", "key": "1" },
     …
   ],
+  "annotationFields": [
+    { "key": "notes",       "label": "Notes",        "type": "text"   },
+    { "key": "cloud_cover", "label": "Cloud cover?", "type": "binary" }
+  ],
   "plots": [
     {
       "id":        "1",
@@ -135,7 +140,8 @@ A project file in `data/projects/<id>.json`:
   "results": {
     "1": {
       "code": 20, "label": "Forest",
-      "confidence": "High", "notes": "",
+      "confidence": "High",
+      "annotations": { "notes": "dense canopy", "cloud_cover": "no" },
       "savedAt": "2026-05-06T11:05:23.000Z"
     },
     …
@@ -146,6 +152,7 @@ A project file in `data/projects/<id>.json`:
 - `plots[]` is set once at creation and immutable thereafter
 - `results{}` grows as the user classifies; keyed by `plot.id`
 - `classSchema[]` can be edited at any time without breaking existing results (results reference codes)
+- `annotationFields[]` is editable at any time. Field `type` is `'text'` or `'binary'` in v1. Binary values are stored as the strings `'yes'`, `'no'`, or empty. **Backward compat:** projects without `annotationFields` default at load time to `[{ key:'notes', label:'Notes', type:'text' }]`; legacy `result.notes` is exposed to the export pipeline as `result.annotations.notes`. Renaming or deleting a field does not migrate previously-stored values — they remain in the JSON on disk but stop appearing in the UI/exports.
 
 ---
 
@@ -173,11 +180,11 @@ User presets are stored in `data/user_presets.json` (gitignored) and merged with
 |--------|-----------------------------------|--------------------------------------------------------|---------|
 | GET    | `/api/projects`                   | —                                                      | array of summaries |
 | GET    | `/api/projects/:id`               | —                                                      | full project |
-| POST   | `/api/projects`                   | `multipart` (`name`, `classSchema` JSON, `file`?)       | `{id}` |
-| POST   | `/api/projects/json`              | `{name, classSchema, plots}`                           | `{id}` |
+| POST   | `/api/projects`                   | `multipart` (`name`, `classSchema` JSON, `annotationFields`? JSON, `file`?) | `{id}` |
+| POST   | `/api/projects/json`              | `{name, classSchema, annotationFields?, plots}`        | `{id}` |
 | POST   | `/api/projects/parse-file`        | `multipart` (`file`)                                   | `{plots, count}` |
 | POST   | `/api/projects/import`            | `multipart` (`file`: project json)                     | `{id}` |
-| PATCH  | `/api/projects/:id`               | `{plotId?, result?, classSchema?, name?, lastUsed?}`   | `{success:true}` |
+| PATCH  | `/api/projects/:id`               | `{plotId?, result?, classSchema?, annotationFields?, name?, lastUsed?}` | `{success:true}` |
 | DELETE | `/api/projects/:id`               | —                                                      | `{success:true}` |
 | GET    | `/api/projects/:id/export`        | —                                                      | downloads `.json` |
 

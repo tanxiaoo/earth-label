@@ -5,7 +5,14 @@ import { initMap, navigateToPlot, setMapLayer, switchBasemap, toggleSplitView,
 import { renderClassButtons, openClassEditor, closeClassEditor, saveClassSchema,
          saveSchemaAsPreset, addEditorClass, applyEditorPreset, exportClassSchema,
          importClassSchema, renderSchemaPreview } from './classes.js';
+import { renderAnnotationInputs, readAnnotationInputs, clearAnnotationInputs,
+         openAnnotationFieldsEditor, closeAnnotationFieldsEditor,
+         addAnnotationField, saveAnnotationFields } from './annotation-fields.js';
 import { exportCSV, exportGeoJSON, exportProjectFile } from './export.js';
+import { initNdviPanel, openNdviPanel, closeNdviPanel, toggleNdviPanel,
+         renderForCurrentPlot as renderNdviForCurrentPlot,
+         fetchNdvi, refreshNdvi, saveNdviGuide, resetNdviGuide,
+         toggleNdviGuide, onNdviYearChange } from './ndvi-panel.js';
 
 // ── tiny helpers ──────────────────────────────────────────────────────────
 const $ = (id) => document.getElementById(id);
@@ -54,7 +61,11 @@ async function init() {
   try {
     const status = await api.getKeyStatus();
     setKeyBadge('planetKeyStatus', status.planet);
+    setKeyBadge('shIdStatus',      status.sentinel_hub_id);
+    setKeyBadge('shSecretStatus',  status.sentinel_hub_sec);
   } catch (_) {}
+
+  initNdviPanel();
 
   try {
     const projects = await api.listProjects();
@@ -117,12 +128,21 @@ async function loadProject(id) {
   try { proj = await api.loadProject(id); }
   catch (e) { alert(`Could not load project: ${e.message}`); return; }
 
+  // Backward compat: projects saved before annotationFields existed have no
+  // such key. Default to a single text field named `notes` so the UI keeps
+  // showing the legacy "Notes" textarea with the same data.
+  if (!Array.isArray(proj.annotationFields) || proj.annotationFields.length === 0) {
+    proj.annotationFields = [{ key: 'notes', label: 'Notes', type: 'text' }];
+  }
+
   const plots = proj.plots.map(p => {
     const r = proj.results?.[p.id] || {};
+    // Legacy result.notes (no annotations object) maps to annotations.notes.
+    const annotations = r.annotations ?? (r.notes != null ? { notes: r.notes } : {});
     return { ...p,
       resultCode:  r.code  ?? null, resultLabel: r.label ?? null,
       confidence:  r.confidence ?? null,
-      notes:       r.notes ?? '',
+      annotations,
       completed:   !!(r.code != null),
     };
   });
@@ -138,7 +158,7 @@ async function loadProject(id) {
   renderClassButtons();
   renderPlotList();
   updateProgress();
-  $('notesInput').value = '';
+  renderAnnotationInputs(null);
   document.querySelectorAll('.conf-btn').forEach(b => b.classList.remove('selected'));
   hide('welcomeOverlay');
 
@@ -304,7 +324,7 @@ export function goToPlot(index) {
     (userText ? `<br><span style="opacity:.85;">Your label: <span style="color:${userColor}">${userText}</span></span>` : '');
 
   setState({ selectedClass: p.resultCode??null, selectedConfidence: p.confidence??null });
-  $('notesInput').value = p.notes || '';
+  renderAnnotationInputs(p);
   renderClassButtons();
   updateConfidenceUI();
   updateSubmitBtn();
@@ -312,6 +332,7 @@ export function goToPlot(index) {
   $('plotCounter').textContent = `${index+1} / ${plots.length}`;
   renderPlotList();
 
+  if (state.ndviPanelOpen) renderNdviForCurrentPlot();
 }
 
 export function nextPlot() {
@@ -381,11 +402,12 @@ export async function submitClassification() {
   const cls     = schema.find(c => c.code === state.selectedClass);
   const plotIdx = state.currentIndex;
   const plotId  = state.plots[plotIdx].id;
+  const annotations = readAnnotationInputs();
   const result  = {
     code:       state.selectedClass,
     label:      cls?.label || '',
     confidence: state.selectedConfidence,
-    notes:      $('notesInput').value,
+    annotations,
   };
 
   // Optimistic update — keep both `plots[i]` (UI source) and
@@ -394,7 +416,7 @@ export async function submitClassification() {
   // a previous plot is captured.
   const plots = [...state.plots];
   plots[plotIdx] = { ...plots[plotIdx], resultCode:result.code, resultLabel:result.label,
-                     confidence:result.confidence, notes:result.notes, completed:true };
+                     confidence:result.confidence, annotations, completed:true };
   const results = { ...(state.project.results || {}),
                     [plotId]: { ...result, savedAt: new Date().toISOString() } };
   setState({
@@ -404,7 +426,7 @@ export async function submitClassification() {
     selectedConfidence: null,
   });
 
-  $('notesInput').value = '';
+  clearAnnotationInputs();
   updateProgress();
   renderPlotList();
 
@@ -415,21 +437,39 @@ export async function submitClassification() {
 }
 
 // ── Settings ──────────────────────────────────────────────────────────────
+function refreshKeyBadges() {
+  return api.getKeyStatus().then(s => {
+    setKeyBadge('planetKeyStatus', s.planet);
+    setKeyBadge('shIdStatus',      s.sentinel_hub_id);
+    setKeyBadge('shSecretStatus',  s.sentinel_hub_sec);
+  });
+}
+
 export function openSettings() {
-  $('planetApiKey').value = '';
+  $('planetApiKey').value     = '';
+  $('shClientId').value       = '';
+  $('shClientSecret').value   = '';
   errMsg('settingsMsg', '');
-  api.getKeyStatus().then(s => setKeyBadge('planetKeyStatus', s.planet)).catch(()=>{});
+  refreshKeyBadges().catch(()=>{});
   show('settingsModal');
 }
 export function closeSettings() { hide('settingsModal'); }
 
 export async function saveSettings() {
-  const planet = $('planetApiKey').value.trim();
-  if (!planet) { errMsg('settingsMsg','Enter the Planet API key'); return; }
+  const planet              = $('planetApiKey').value.trim();
+  const sentinel_hub_id     = $('shClientId').value.trim();
+  const sentinel_hub_secret = $('shClientSecret').value.trim();
+  const payload = {};
+  if (planet)              payload.planet              = planet;
+  if (sentinel_hub_id)     payload.sentinel_hub_id     = sentinel_hub_id;
+  if (sentinel_hub_secret) payload.sentinel_hub_secret = sentinel_hub_secret;
+  if (Object.keys(payload).length === 0) {
+    errMsg('settingsMsg','Enter at least one credential to save.');
+    return;
+  }
   try {
-    await api.saveKeys({ planet });
-    const s = await api.getKeyStatus();
-    setKeyBadge('planetKeyStatus', s.planet);
+    await api.saveKeys(payload);
+    await refreshKeyBadges();
     errMsg('settingsMsg','');
     closeSettings();
   } catch (e) { errMsg('settingsMsg', e.message); }
@@ -437,8 +477,7 @@ export async function saveSettings() {
 
 export async function clearKey(which) {
   await api.deleteKeys({ [which]:true });
-  const s = await api.getKeyStatus();
-  setKeyBadge('planetKeyStatus', s.planet);
+  await refreshKeyBadges();
 }
 
 // ── Demo data ─────────────────────────────────────────────────────────────
@@ -516,8 +555,13 @@ window.app = {
   openSettings, closeSettings, saveSettings, clearKey,
   openClassEditor, closeClassEditor, saveClassSchema, saveSchemaAsPreset,
   addEditorClass, applyEditorPreset, exportClassSchema, importClassSchema,
+  openAnnotationFieldsEditor, closeAnnotationFieldsEditor,
+  addAnnotationField, saveAnnotationFields,
   exportCSV, exportGeoJSON,
   openGoogleEarth, onGeRangeInput,
+  toggleNdviPanel, openNdviPanel, closeNdviPanel,
+  fetchNdvi, refreshNdvi, saveNdviGuide, resetNdviGuide,
+  toggleNdviGuide, onNdviYearChange,
 };
 
 // ── Start ─────────────────────────────────────────────────────────────────

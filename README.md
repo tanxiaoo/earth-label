@@ -13,6 +13,7 @@ A self-hosted web app for satellite image interpretation and land-cover validati
 - **Multi-source basemaps** — Google Satellite, ESRI World Imagery (latest + Wayback year-end snapshots 2018–2025, no API key required), Bing, Sentinel-2 cloudless (2018–2024), Planet PlanetScope (monthly mosaics 2016–2026)
 - **Dual map / split view** — Compare two basemaps side-by-side with synced pan/zoom
 - **Dynamic classification schemas** — 10 built-in real-world LULC presets (MOLCA, CORINE, IGBP/MODIS, ESA CCI, NLCD, IPCC, Anderson/USGS, FROM-GLC, Binary, Custom). Each project carries its own schema; edit, add, delete classes with color picker and keyboard shortcuts. Save any edited schema as a reusable user preset.
+- **Configurable annotation fields** — Each project defines its own per-plot annotation columns: rename the default `notes` text field, or add more fields (text or yes/no binary) such as `cloud_cover`, `damage_observed`. Each field becomes its own column in CSV / property in GeoJSON exports.
 - **GIS import** — `.csv` · `.geojson` · `.kml` · `.kmz` · Shapefile (`.zip`). Points and Polygons supported; polygon centroids used for navigation, full geometry drawn on the map.
 - **Server-side API key management** — Planet key stored in `.env` and proxied through the backend; the key never reaches the browser. Esri layers are public — no key needed.
 - **Project files on disk** — Each project = one JSON file in `data/projects/`. Portable, version-controllable, easy to share. Export/import any project as a `.json` file.
@@ -126,29 +127,31 @@ PLOTID,LAT,LON,ref_code,ref_label
 2,7.5617,13.7757,5,Shrubland
 ```
 
-Recognised aliases on upload:
+Recognised columns on upload:
 
-| Field         | Accepted column names |
-|---------------|------------------------|
-| Plot ID       | `PLOTID`, `ID`, `FID`, `NAME` |
-| Latitude      | `LAT`, `LATITUDE`, `y` |
-| Longitude     | `LON`, `LONG`, `LONGITUDE`, `x`, `lng` |
-| Ref. code     | `molca_class`, `ref_code`, `class_code`, `ref_class` |
-| Ref. label    | `molca_label`, `ref_label`, `class_label`, `label` |
+| Field                       | Accepted column names |
+|-----------------------------|------------------------|
+| Plot ID (optional)          | `PLOTID`, `plotid`, `ID`, `id`, `FID`, `fid`, `NAME`, `name`, `Plot_ID`, `plot_id` |
+| Latitude (required)         | `LAT`, `latitude`, `y`, `Y` |
+| Longitude (required)        | `LON`, `LONG`, `LONGITUDE`, `lng`, `LNG`, `x`, `X` |
+| Reference code (optional)   | `ref_code` |
+| Reference label (optional)  | `ref_label` |
 
-Unknown columns are preserved as plot metadata and round-trip into GeoJSON exports.
+Header matching is **exact and case-insensitive** — `ref_code` and `REF_CODE` are both recognized, but variants like `molca_class`, `molca_class_2024`, or `class_code` are not. Any column whose header is not in the table above is preserved as plot metadata and round-trips into **both CSV and GeoJSON** exports. If your CSV uses a different name for the reference column, either rename it to `ref_code` / `ref_label` before upload, or accept that it will appear as a metadata column in exports rather than as the canonical reference column.
 
 ### Output (CSV download)
 
 ```
-PLOTID, LAT, LON, ref_code, ref_label, class_code, class_label, confidence, notes
+PLOTID, LAT, LON, ref_code, ref_label, class_code, class_label, confidence, <annotation fields…>, <meta columns…>
 ```
 
-A UTF-8 BOM is prepended so Excel renders non-ASCII project / class names correctly. The export reads from live in-memory state, so re-classifying a previous plot is reflected on the **next** download immediately.
+The columns after `confidence` come from the project's **annotation fields** — by default a single text field named `notes`, but you can rename it and add more (yes/no flags, additional text fields) via the ✏ button next to the "Annotations" header in the sidebar. Each field's `key` becomes the column header; values are stored verbatim (binary fields write `yes` / `no` / empty).
+
+Any unknown columns from the input upload are appended at the very end in their original order, so the export is a strict superset of the input. A UTF-8 BOM is prepended so Excel renders non-ASCII project / class names correctly. The export reads from live in-memory state, so re-classifying a previous plot is reflected on the **next** download immediately.
 
 ### Output (GeoJSON download)
 
-Each feature carries the canonical snake-case properties (`plot_id, lat, lon, ref_code, ref_label, class_code, class_label, confidence, notes, project_name, saved_at`) plus any extra columns from the original upload, and the original `geometry` (Point or Polygon).
+Each feature carries the canonical snake-case properties (`plot_id, lat, lon, ref_code, ref_label, class_code, class_label, confidence, project_name, saved_at`), one property per annotation field, plus any extra columns from the original upload, and the original `geometry` (Point or Polygon).
 
 ---
 

@@ -40,19 +40,19 @@ function featureToPlot(feature, idx) {
     props.Plot_ID || props.plot_id || (idx + 1)
   );
 
-  // Reference class (optional)
-  const refCode = props.molca_class ?? props.ref_code ?? props.class_code ??
-                  props.CLASS_CODE ?? props.ref_class ?? null;
-  const refLabel = props.molca_label ?? props.ref_label ?? props.class_label ??
-                   props.CLASS_LABEL ?? props.label ?? null;
+  // Reference class (optional) — only ref_code / ref_label are recognized.
+  // One uppercase variant covers shapefile DBF fields that GIS tools commonly
+  // emit in caps. Any other column name (molca_class, class_code, …) lands in
+  // meta and round-trips via the CSV/GeoJSON exporters.
+  const refCode = props.ref_code ?? props.REF_CODE ?? null;
+  const refLabel = props.ref_label ?? props.REF_LABEL ?? null;
 
   // Keep all other attributes as metadata
   const meta = {};
   for (const [k, v] of Object.entries(props)) {
     if (!['PLOTID','plotid','ID','id','FID','fid','NAME','name',
           'Plot_ID','plot_id','LAT','lat','LON','lon','LATITUDE',
-          'LONGITUDE','molca_class','molca_label','ref_code','ref_label',
-          'class_code','class_label','CLASS_CODE','CLASS_LABEL'].includes(k)) {
+          'LONGITUDE','ref_code','REF_CODE','ref_label','REF_LABEL'].includes(k)) {
       meta[k] = v;
     }
   }
@@ -81,8 +81,8 @@ function parseCSV(content) {
   const idIdx    = col(['PLOTID','plotid','ID','id','FID','fid','name','NAME']);
   const latIdx   = col(['LAT','lat','LATITUDE','latitude','y','Y']);
   const lonIdx   = col(['LON','lon','LONG','long','LONGITUDE','longitude','x','X','lng','LNG']);
-  const rcIdx    = col(['molca_class','ref_code','class_code','CLASS_CODE','ref_class','refcode','refCode']);
-  const rlIdx    = col(['molca_label','ref_label','class_label','CLASS_LABEL','ref_label','refLabel','reflabel']);
+  const rcIdx    = col(['ref_code']);
+  const rlIdx    = col(['ref_label']);
 
   if (latIdx === -1 || lonIdx === -1) throw new Error('CSV must have LAT and LON columns');
 
