@@ -25,15 +25,29 @@ function _csvEscape(v) {
 // LAT, LON). project_name and saved_at are intentionally excluded — the
 // project name is in the filename, and the timestamp is not useful in the
 // per-row results table.
+// New UA columns (pixel mode only):
+//   assessment_mode — "point" | "pixel"
+//   ua_size_m       — UA square side in meters
+//   sub_point_grid  — grid config e.g. "5x5"
+//   sub_points_json — JSON array of per-sub-point results
 const FIXED_CSV_COLUMNS = [
-  ['PLOTID',      p => p.id],
-  ['LAT',         p => p.lat],
-  ['LON',         p => p.lon],
-  ['ref_code',    p => p.refCode ?? ''],
-  ['ref_label',   p => p.refLabel ?? ''],
-  ['class_code',  p => p.resultCode ?? ''],
-  ['class_label', p => p.resultLabel ?? ''],
-  ['confidence',  p => p.confidence ?? ''],
+  ['PLOTID',          p => p.id],
+  ['LAT',             p => p.lat],
+  ['LON',             p => p.lon],
+  ['ref_code',        p => p.refCode ?? ''],
+  ['ref_label',       p => p.refLabel ?? ''],
+  ['class_code',      p => p.resultCode ?? ''],
+  ['class_label',     p => p.resultLabel ?? ''],
+  ['confidence',      p => p.confidence ?? ''],
+  ['assessment_mode', () => state.assessmentMode],
+  ['ua_size_m',       () => state.assessmentMode === 'pixel' ? state.plotSizeM : ''],
+  ['sub_point_grid',  () => state.assessmentMode === 'pixel' ? state.subPointGrid : ''],
+  ['sub_points_json', p => {
+    if (state.assessmentMode !== 'pixel') return '';
+    const sp = state.project?.results?.[p.id]?.subPoints;
+    if (!sp || !sp.length) return '';
+    return JSON.stringify(sp);
+  }],
 ];
 
 // Per-project annotation fields default to a single text field named `notes`
@@ -86,25 +100,31 @@ export function exportCSV() {
 }
 
 // ── GeoJSON export ────────────────────────────────────────────────────────
-// GeoJSON properties keep snake_case lowercase, including project_name and
-// saved_at — programmatic consumers benefit from that metadata.
 function _geoJsonProps(plot) {
   const annoFields = _annoFields();
-  const annoProps = {};
+  const annoProps  = {};
   for (const f of annoFields) annoProps[f.key] = _annoValue(plot, f.key);
-  return {
-    plot_id:      plot.id,
-    lat:          plot.lat,
-    lon:          plot.lon,
-    ref_code:     plot.refCode ?? '',
-    ref_label:    plot.refLabel ?? '',
-    class_code:   plot.resultCode ?? '',
-    class_label:  plot.resultLabel ?? '',
-    confidence:   plot.confidence ?? '',
+  const base = {
+    plot_id:         plot.id,
+    lat:             plot.lat,
+    lon:             plot.lon,
+    ref_code:        plot.refCode ?? '',
+    ref_label:       plot.refLabel ?? '',
+    class_code:      plot.resultCode ?? '',
+    class_label:     plot.resultLabel ?? '',
+    confidence:      plot.confidence ?? '',
     ...annoProps,
-    project_name: state.project?.name || '',
-    saved_at:     state.project?.results?.[plot.id]?.savedAt ?? '',
+    project_name:    state.project?.name || '',
+    saved_at:        state.project?.results?.[plot.id]?.savedAt ?? '',
+    assessment_mode: state.assessmentMode,
   };
+  if (state.assessmentMode === 'pixel') {
+    base.ua_size_m      = state.plotSizeM;
+    base.sub_point_grid = state.subPointGrid;
+    const sp = state.project?.results?.[plot.id]?.subPoints;
+    base.sub_points     = sp || [];
+  }
+  return base;
 }
 
 export function exportGeoJSON() {

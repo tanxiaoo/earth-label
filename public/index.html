@@ -28,11 +28,11 @@
 
 <!-- CREATE PROJECT -->
 <div id="createProjectModal" class="modal-overlay hidden">
-  <div class="modal-content" style="max-width:460px;width:90vw;">
+  <div class="modal-content" style="max-width:480px;width:90vw;">
     <h3>Create Project</h3>
 
     <label class="field-label">Project Name</label>
-    <input type="text" id="newProjectName" placeholder="e.g. Nairobi 2024" class="field-input">
+    <input type="text" id="newProjectName" placeholder="e.g. Maine CDL 2023" class="field-input">
 
     <label class="field-label" style="margin-top:12px;">Plot File
       <span class="hint">CSV · GeoJSON · KML · KMZ · Shapefile (.zip)</span>
@@ -48,6 +48,73 @@
     </select>
     <div id="schemaPreview" class="schema-preview"></div>
 
+    <!-- ── Assessment Mode ── -->
+    <div style="margin-top:16px;padding:12px;background:#0f1117;border-radius:8px;border:1px solid var(--panel-border);">
+      <label class="field-label" style="margin-bottom:8px;">Assessment Mode</label>
+      <div style="display:flex;gap:8px;margin-bottom:10px;">
+        <label style="flex:1;cursor:pointer;">
+          <input type="radio" name="createAssessMode" id="createAssessModePoint" value="point"
+                 onchange="app.onCreateAssessModeChange()" checked style="margin-right:5px;">
+          <span style="font-size:13px;font-weight:600;">Point</span>
+          <div style="font-size:11px;color:var(--text-dim);margin-top:2px;margin-left:18px;">
+            Classify each sample point directly. No area boundary shown.
+          </div>
+        </label>
+        <label style="flex:1;cursor:pointer;">
+          <input type="radio" name="createAssessMode" id="createAssessModePixel" value="pixel"
+                 onchange="app.onCreateAssessModeChange()" style="margin-right:5px;">
+          <span style="font-size:13px;font-weight:600;">Pixel / Plot (CEO)</span>
+          <div style="font-size:11px;color:var(--text-dim);margin-top:2px;margin-left:18px;">
+            Each entry is a pixel center. Classify a sub-point grid inside the UA square.
+          </div>
+        </label>
+      </div>
+
+      <!-- UA fields (pixel mode only) -->
+      <div id="createUAFields" style="display:none;padding-top:10px;border-top:1px solid var(--panel-border);">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;">
+          <div>
+            <label class="field-label">UA Size (meters)</label>
+            <div style="display:flex;gap:4px;margin-bottom:6px;flex-wrap:wrap;">
+              <button class="basemap-btn" style="font-size:11px;padding:3px 8px;" onclick="document.getElementById('createPlotSizeM').value=10">10 m</button>
+              <button class="basemap-btn" style="font-size:11px;padding:3px 8px;" onclick="document.getElementById('createPlotSizeM').value=20">20 m</button>
+              <button class="basemap-btn" style="font-size:11px;padding:3px 8px;" onclick="document.getElementById('createPlotSizeM').value=30">30 m</button>
+              <button class="basemap-btn" style="font-size:11px;padding:3px 8px;" onclick="document.getElementById('createPlotSizeM').value=50">50 m</button>
+            </div>
+            <input type="number" id="createPlotSizeM" value="30" min="1" max="500" class="field-input" placeholder="e.g. 30">
+          </div>
+          <div>
+            <label class="field-label">Sub-point Grid</label>
+            <select id="createSubGrid" class="field-input">
+              <option value="3x3">3×3 (9 points)</option>
+              <option value="5x5" selected>5×5 (25 points)</option>
+            </select>
+            <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">Points placed inside UA square</div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;">
+          <div>
+            <label class="field-label">Aggregation Rule</label>
+            <select id="createAggRule" class="field-input">
+              <option value="majority" selected>Majority class wins</option>
+              <option value="threshold">Threshold (%) must be met</option>
+            </select>
+          </div>
+          <div>
+            <label class="field-label">Threshold %</label>
+            <input type="number" id="createAggThreshold" value="50" min="1" max="100" class="field-input" placeholder="50">
+            <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">Used only with threshold rule</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- hidden select used by onCreateAssessModeChange() -->
+    <select id="createAssessMode" style="display:none">
+      <option value="point">point</option>
+      <option value="pixel">pixel</option>
+    </select>
+
     <div id="createError" class="error-msg hidden"></div>
 
     <div class="modal-actions" style="margin-top:16px;">
@@ -57,7 +124,7 @@
   </div>
 </div>
 
-<!-- SETTINGS -->
+<!-- SETTINGS (API keys) -->
 <div id="settingsModal" class="modal-overlay hidden">
   <div class="modal-content" style="max-width:400px;">
     <h3>Settings</h3>
@@ -101,6 +168,65 @@
     <div class="modal-actions" style="margin-top:16px;">
       <button class="basemap-btn" onclick="app.closeSettings()">Cancel</button>
       <button class="submit-btn" style="padding:8px 20px;width:auto;" onclick="app.saveSettings()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- PROJECT SETTINGS (Assessment Mode / UA) -->
+<div id="projectSettingsModal" class="modal-overlay hidden">
+  <div class="modal-content" style="max-width:480px;width:90vw;">
+    <h3>Project Settings — Assessment / UA</h3>
+    <p style="font-size:12px;color:var(--text-dim);margin-bottom:14px;">
+      Changes apply immediately to all new navigations in this project.
+      Existing results are preserved; re-classifying a plot will overwrite its result.
+    </p>
+
+    <label class="field-label">Assessment Mode</label>
+    <select id="settingsAssessMode" class="field-input" onchange="app.onSettingsAssessModeChange()">
+      <option value="point">Point — classify each sample point directly</option>
+      <option value="pixel">Pixel / Plot (CEO) — sub-point grid inside UA square</option>
+    </select>
+
+    <div id="settingsUAFields" style="display:none;margin-top:14px;padding:12px;background:#0f1117;border-radius:8px;border:1px solid var(--panel-border);">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div>
+          <label class="field-label">UA Size (meters)</label>
+          <div style="display:flex;gap:4px;margin-bottom:6px;flex-wrap:wrap;">
+            <button class="basemap-btn" style="font-size:11px;padding:3px 8px;" onclick="document.getElementById('settingsPlotSizeM').value=10">10 m</button>
+            <button class="basemap-btn" style="font-size:11px;padding:3px 8px;" onclick="document.getElementById('settingsPlotSizeM').value=20">20 m</button>
+            <button class="basemap-btn" style="font-size:11px;padding:3px 8px;" onclick="document.getElementById('settingsPlotSizeM').value=30">30 m</button>
+            <button class="basemap-btn" style="font-size:11px;padding:3px 8px;" onclick="document.getElementById('settingsPlotSizeM').value=50">50 m</button>
+          </div>
+          <input type="number" id="settingsPlotSizeM" value="30" min="1" max="500" class="field-input">
+        </div>
+        <div>
+          <label class="field-label">Sub-point Grid</label>
+          <select id="settingsSubGrid" class="field-input">
+            <option value="3x3">3×3 (9 points)</option>
+            <option value="5x5" selected>5×5 (25 points)</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;">
+        <div>
+          <label class="field-label">Aggregation Rule</label>
+          <select id="settingsAggRule" class="field-input">
+            <option value="majority">Majority class wins</option>
+            <option value="threshold">Threshold (%) must be met</option>
+          </select>
+        </div>
+        <div>
+          <label class="field-label">Threshold %</label>
+          <input type="number" id="settingsAggThreshold" value="50" min="1" max="100" class="field-input">
+        </div>
+      </div>
+    </div>
+
+    <div id="projectSettingsMsg" class="error-msg hidden" style="margin-top:10px;"></div>
+
+    <div class="modal-actions" style="margin-top:16px;">
+      <button class="basemap-btn" onclick="app.closeProjectSettings()">Cancel</button>
+      <button class="submit-btn" style="padding:8px 20px;width:auto;" onclick="app.saveProjectSettings()">Save Settings</button>
     </div>
   </div>
 </div>
@@ -189,13 +315,17 @@
     <div class="sidebar-toolbar" style="justify-content:space-between;">
       <button class="basemap-btn" style="border:none;padding:0;display:flex;align-items:center;gap:4px;font-size:12px;" onclick="app.showProjectListView()">← Projects</button>
       <div style="display:flex;gap:6px;">
+        <button class="basemap-btn" style="padding:4px 10px;font-size:11px;" onclick="app.openProjectSettings()" title="Assessment / UA settings">⚙ UA</button>
         <button class="basemap-btn" style="padding:4px 10px;font-size:11px;" onclick="app.exportProjectFile()" title="Export project JSON">↓</button>
         <button class="basemap-btn" style="padding:4px 10px;font-size:11px;color:var(--danger);border-color:var(--danger);" onclick="app.deleteCurrentProject()">🗑</button>
       </div>
     </div>
 
-    <div style="padding:12px 20px;border-bottom:1px solid var(--panel-border);">
+    <div style="padding:10px 20px 8px;border-bottom:1px solid var(--panel-border);">
       <h2 id="activeProjectName" style="font-size:15px;font-weight:700;">—</h2>
+      <div style="margin-top:4px;">
+        <span id="uaModeBadge" class="ua-mode-badge" style="display:none;"></span>
+      </div>
     </div>
 
     <div class="progress-bar">
@@ -260,7 +390,7 @@
     <button class="nav-btn prev" onclick="app.prevPlot()">← Prev</button>
     <button class="nav-btn next" onclick="app.nextPlot()">Next →</button>
     <button class="nav-btn" id="btn-ge" onclick="app.openGoogleEarth()" disabled title="Open this plot in Google Earth Web (new tab)" style="background:#2a2d3a;color:var(--text);">🌍 Google Earth</button>
-    <div class="ge-range" title="Camera distance (meters) for Google Earth Pro live sync and the Google Earth Web button. Drag to adjust.">
+    <div class="ge-range" title="Camera distance (meters) for Google Earth Pro live sync and Google Earth Web.">
       <input type="range" id="geRangeSlider" min="50" max="5000" step="50" value="1000"
              oninput="app.onGeRangeInput(this.value)">
       <span id="geRangeLabel" class="ge-range-label">1000 m</span>
@@ -347,10 +477,15 @@
 <div class="classify-panel">
   <div class="classify-header">
     <div style="display:flex;justify-content:space-between;align-items:center;">
-      <h2>Classify This Plot</h2>
+      <h2 id="classifyHeader">Classify This Plot</h2>
       <button class="icon-btn" onclick="app.openClassEditor()" title="Edit class schema">✏</button>
     </div>
     <div class="ref-badge" id="molcaRef">Reference: <span>–</span></div>
+    <!-- Sub-point progress (pixel mode only) -->
+    <div id="subPointInfo" style="display:none;margin-top:8px;">
+      <div class="sp-progress-label"></div>
+      <div class="sp-dots"></div>
+    </div>
   </div>
 
   <div class="class-list" id="classList"></div>

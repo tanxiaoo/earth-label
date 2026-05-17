@@ -24,10 +24,11 @@ export const listProjects  = ()       => fetch('/api/projects').then(_json);
 export const loadProject   = (id)     => fetch(`/api/projects/${id}`).then(_json);
 export const deleteProject = (id)     => fetch(`/api/projects/${id}`, { method:'DELETE' }).then(_json);
 
-export async function createProject(name, classSchema, file) {
+export async function createProject(name, classSchema, file, uaSettings) {
   const form = new FormData();
   form.append('name', name);
   form.append('classSchema', JSON.stringify(classSchema));
+  form.append('uaSettings', JSON.stringify(uaSettings || {}));
   if (file) form.append('file', file);
   return fetch('/api/projects', { method:'POST', body:form }).then(_json);
 }
@@ -40,6 +41,10 @@ export const saveResult = (projectId, plotId, result) =>
 
 export const saveClassSchema = (projectId, classSchema) =>
   updateProject(projectId, { classSchema, lastUsed: new Date().toISOString() });
+
+// Save UA / assessment settings for an existing project
+export const saveProjectSettings = (projectId, uaSettings) =>
+  updateProject(projectId, { uaSettings, lastUsed: new Date().toISOString() });
 
 export async function parseFile(file) {
   const form = new FormData();

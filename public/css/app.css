@@ -331,6 +331,43 @@ body.split-mode .global-basemaps { display:none !important; }
 }
 .icon-btn:hover { color:var(--text);background:rgba(255,255,255,.08); }
 
+/* ── UA MODE BADGE ───────────────────────────────────────────────────────── */
+.ua-mode-badge {
+  display:inline-block;padding:2px 8px;
+  background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);
+  color:#f59e0b;border-radius:4px;font-size:10px;font-weight:700;
+  font-family:'JetBrains Mono',monospace;letter-spacing:.3px;
+}
+
+/* ── SUB-POINT PROGRESS (classify panel) ─────────────────────────────────── */
+#subPointInfo {
+  padding:6px 0 2px;
+}
+.sp-progress-label {
+  font-size:11px;color:var(--text-dim);margin-bottom:5px;
+}
+.sp-dots {
+  display:flex;flex-wrap:wrap;gap:3px;
+}
+.sp-dot {
+  display:inline-block;width:12px;height:12px;border-radius:2px;
+  transition:background .15s,border .15s;cursor:default;
+}
+
+/* ── UA SIZE TOOLTIP (Leaflet) ───────────────────────────────────────────── */
+.ua-size-tooltip {
+  background:rgba(15,17,23,.85) !important;
+  border:1px solid #f59e0b !important;
+  border-radius:4px !important;
+  color:#f59e0b !important;
+  font-family:'JetBrains Mono',monospace !important;
+  font-size:10px !important;
+  font-weight:700 !important;
+  padding:2px 6px !important;
+  white-space:nowrap !important;
+}
+.ua-size-tooltip::before { display:none !important; }
+
 /* Google Earth zoom slider in the toolbar */
 .ge-range {
   display:flex;align-items:center;gap:8px;padding:0 6px;

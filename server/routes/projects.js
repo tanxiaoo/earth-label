@@ -88,7 +88,7 @@ router.get('/:id', (req, res) => {
 // POST /api/projects/json — create from raw JSON body (no file; used for demo/programmatic creation)
 router.post('/json', (req, res) => {
   ensureDir();
-  const { name, classSchema, plots, annotationFields } = req.body;
+  const { name, classSchema, plots, annotationFields, uaSettings } = req.body;
   if (!name) return res.status(400).json({ error: 'Project name required' });
   let annoFields;
   try {
@@ -96,6 +96,7 @@ router.post('/json', (req, res) => {
   } catch (err) {
     return res.status(400).json({ error: err.message });
   }
+  const ua = uaSettings || {};
   const id = `proj_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
   const proj = {
     id, name,
@@ -105,6 +106,11 @@ router.post('/json', (req, res) => {
     annotationFields: annoFields,
     plots: (plots || []).map(p => ({ ...p, geometry: p.geometry ?? null, meta: p.meta ?? {} })),
     results: {},
+    assessmentMode:       ua.assessmentMode       || 'point',
+    plotSizeM:            ua.plotSizeM            || 30,
+    subPointGrid:         ua.subPointGrid         || '5x5',
+    aggregationRule:      ua.aggregationRule      || 'majority',
+    aggregationThreshold: ua.aggregationThreshold || 0.5,
   };
   writeProj(proj);
   res.json({ id });
@@ -152,6 +158,9 @@ router.post('/', upload.single('file'), async (req, res) => {
     }
   }
 
+  let uaSettings = {};
+  try { uaSettings = JSON.parse(req.body.uaSettings || '{}'); } catch { uaSettings = {}; }
+
   const id = `proj_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
   const proj = {
     id, name,
@@ -161,6 +170,12 @@ router.post('/', upload.single('file'), async (req, res) => {
     annotationFields,
     plots,
     results: {},
+    // UA / Assessment settings
+    assessmentMode:       uaSettings.assessmentMode       || 'point',
+    plotSizeM:            uaSettings.plotSizeM            || 30,
+    subPointGrid:         uaSettings.subPointGrid         || '5x5',
+    aggregationRule:      uaSettings.aggregationRule      || 'majority',
+    aggregationThreshold: uaSettings.aggregationThreshold || 0.5,
   };
   writeProj(proj);
   res.json({ id });
@@ -170,7 +185,7 @@ router.post('/', upload.single('file'), async (req, res) => {
 router.patch('/:id', (req, res) => {
   if (!fs.existsSync(projPath(req.params.id))) return res.status(404).json({ error: 'Not found' });
   const proj = readProj(req.params.id);
-  const { plotId, result, classSchema, annotationFields, ndviCacheUpdate, name, lastUsed } = req.body;
+  const { plotId, result, classSchema, annotationFields, ndviCacheUpdate, name, lastUsed, uaSettings } = req.body;
 
   if (plotId && result) {
     proj.results = proj.results || {};
@@ -190,6 +205,13 @@ router.patch('/:id', (req, res) => {
     };
   }
   if (name)        proj.name = name;
+  if (uaSettings) {
+    if (uaSettings.assessmentMode       != null) proj.assessmentMode       = uaSettings.assessmentMode;
+    if (uaSettings.plotSizeM            != null) proj.plotSizeM            = uaSettings.plotSizeM;
+    if (uaSettings.subPointGrid         != null) proj.subPointGrid         = uaSettings.subPointGrid;
+    if (uaSettings.aggregationRule      != null) proj.aggregationRule      = uaSettings.aggregationRule;
+    if (uaSettings.aggregationThreshold != null) proj.aggregationThreshold = uaSettings.aggregationThreshold;
+  }
   proj.lastUsed = lastUsed || new Date().toISOString();
 
   writeProj(proj);

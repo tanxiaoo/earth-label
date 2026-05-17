@@ -1,6 +1,6 @@
 {
   "name": "earth-label",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Satellite image land cover labeling tool",
   "main": "server/index.js",
   "scripts": {
