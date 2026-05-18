@@ -49,9 +49,21 @@ That's it. Open the URL in your browser.
 
 ### 3. Add a Planet API key (optional, for PlanetScope imagery)
 
-Click the **⚙ Settings** icon (top-left) and paste your Planet API key. It is written to `.env` on the server — never sent back to the browser. Both legacy bare-value `.env` files and proper `KEY=VALUE` files are auto-detected and migrated.
+Click the **⚙ Settings** icon (top-left) and paste your Planet API key. It is written to `.env` on the server — never sent back to the browser.
 
 Esri layers (World Imagery and Wayback) are public — no API key required.
+
+### 4. Add Sentinel Hub credentials (optional, for NDVI time-series)
+
+The NDVI panel fetches monthly Sentinel-2 NDVI via the **Copernicus Data Space Ecosystem (CDSE)** Sentinel Hub Statistical API. It is free for research use.
+
+1. **Register** at [dataspace.copernicus.eu](https://dataspace.copernicus.eu) (free — use your university email)
+2. Log in → top-right username → **User Settings** → left sidebar **OAuth clients**
+3. Click **+ Create new** → give it any name (e.g. `earth-label`) → **Create**
+4. Copy the **Client ID** and **Client Secret** (the secret is shown only once)
+5. In EarthLabel: **⚙ Settings** → paste both values → **Save**
+
+Free tier: ~30,000 processing units/month — sufficient for thousands of NDVI fetches per month.
 
 ---
 

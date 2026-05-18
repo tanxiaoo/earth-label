@@ -24,15 +24,52 @@ Open <http://localhost:3000>. On first launch you'll see the welcome screen with
 
 ## 2. Setting API Keys
 
-Only the **Planet** layer needs an API key. Esri (World Imagery + Wayback) is public.
+Two optional integrations require credentials. Both are stored in `.env` on your local machine and proxied through the backend — keys never reach the browser.
+
+### Planet (PlanetScope monthly imagery)
 
 1. Click the **⚙** icon in the top-left sidebar
-2. Paste your **Planet API key** ([sign up](https://www.planet.com/account/))
+2. Paste your **Planet API key** ([sign up at planet.com/account](https://www.planet.com/account/))
 3. Click **Save**
 
-The key is stored in `.env` on the server (your local machine) and proxied through the backend. It never reaches the browser. Click the **✕** next to the field to clear it.
+> The server auto-detects legacy `.env` files and migrates them to `KEY=VALUE` format automatically.
 
-> The server auto-detects legacy `.env` files (bare values under `# Planet` / `# Esri` comments) and migrates them to proper `KEY=VALUE` format on first read.
+### Sentinel Hub (NDVI time-series panel)
+
+The NDVI panel uses the **Copernicus Data Space Ecosystem (CDSE)** Sentinel Hub Statistical API to fetch monthly Sentinel-2 NDVI values. It is **free for research and academic use**.
+
+**Step 1 — Create a CDSE account**
+
+Go to [dataspace.copernicus.eu](https://dataspace.copernicus.eu) and click **Register**. Use your university or institutional email. Confirm the email and log in.
+
+**Step 2 — Create an OAuth client**
+
+1. Click your username (top-right) → **User Settings**
+2. In the left sidebar click **OAuth clients**
+3. Click **+ Create new**
+4. Give the client any name (e.g. `earth-label`) and click **Create**
+5. You will see a **Client ID** and a **Client Secret**
+
+> ⚠ Copy the Client Secret immediately — it is shown only once. If you lose it, delete the client and create a new one.
+
+**Step 3 — Add credentials to EarthLabel**
+
+1. Click **⚙ Settings** in the top-left sidebar
+2. Scroll to the **Sentinel Hub** section
+3. Paste the **Client ID** and **Client Secret**
+4. Click **Save** — both are written to `.env` on the server
+
+Once saved, open the NDVI panel via the **NDVI** toolbar button. The first fetch for each plot takes ~2–3 seconds; results are cached per project so subsequent views are instant.
+
+**Free tier limits**
+
+| Quota | Amount |
+|-------|--------|
+| Processing units / month | ~30,000 (free tier) |
+| Cost per NDVI fetch (one point, one year) | ~1–2 units |
+| Effective fetches / month | ~15,000–30,000 |
+
+This is more than sufficient for a thesis-scale dataset (hundreds of plots × a few years).
 
 ---
 
