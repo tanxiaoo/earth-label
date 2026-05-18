@@ -14,7 +14,7 @@ import { exportCSV, exportGeoJSON, exportProjectFile } from './export.js';
 import { initNdviPanel, openNdviPanel, closeNdviPanel, toggleNdviPanel,
          renderForCurrentPlot as renderNdviForCurrentPlot,
          fetchNdvi, refreshNdvi, saveNdviGuide, resetNdviGuide,
-         toggleNdviGuide, onNdviYearChange } from './ndvi-panel.js';
+         toggleNdviGuide, onNdviYearChange, toggleSeasonBand } from './ndvi-panel.js';
 
 // ── tiny helpers ──────────────────────────────────────────────────────────
 const $ = (id) => document.getElementById(id);
@@ -1041,7 +1041,7 @@ window.app = {
   toggleTimerPause,
   toggleNdviPanel, openNdviPanel, closeNdviPanel,
   fetchNdvi, refreshNdvi, saveNdviGuide, resetNdviGuide,
-  toggleNdviGuide, onNdviYearChange,
+  toggleNdviGuide, onNdviYearChange, toggleSeasonBand,
 };
 
 // ── Start ─────────────────────────────────────────────────────────────────

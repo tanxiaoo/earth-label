@@ -29,6 +29,32 @@ let currentPlotId = null;  // plot whose data the panel is currently showing
 let currentYear = Number(localStorage.getItem('ndviPanelYear')) || DEFAULT_YEAR;
 let initialized = false;
 
+// ── Growing season band ───────────────────────────────────────────────────
+// Default: Apr (idx 3) – Sep (idx 8), typical Northern-Hemisphere temperate cropland.
+// Off by default; user toggles with the 🌱 button; persisted in localStorage.
+const SEASON_START = 3;   // April  (0-indexed)
+const SEASON_END   = 8;   // September (0-indexed, inclusive)
+let showSeasonBand = localStorage.getItem('ndviSeasonBand') === '1';
+
+const seasonPlugin = {
+  id: 'earthlabel-season',
+  beforeDraw(c) {
+    if (!showSeasonBand) return;
+    const { ctx, chartArea, scales: { x } } = c;
+    if (!x || !chartArea) return;
+    const x1 = x.getPixelForValue(SEASON_START - 0.5);
+    const x2 = x.getPixelForValue(SEASON_END   + 0.5);
+    ctx.save();
+    ctx.fillStyle = 'rgba(34,197,94,0.10)';
+    ctx.fillRect(x1, chartArea.top, x2 - x1, chartArea.bottom - chartArea.top);
+    ctx.fillStyle = 'rgba(34,197,94,0.55)';
+    ctx.font = '9px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('growing season', (x1 + x2) / 2, chartArea.top + 10);
+    ctx.restore();
+  },
+};
+
 // Auto-fetch state (Change 3): when the panel is open, navigating to an
 // uncached plot triggers a fetch automatically. To avoid blasting the user
 // with credential errors, the first auth failure disables auto-fetch for the
@@ -132,6 +158,7 @@ export function openNdviPanel() {
   setState({ ndviPanelOpen: true });
   $('ndviPanel').classList.remove('hidden');
   $('btn-ndvi')?.classList.add('active');
+  $('ndviSeasonBtn')?.classList.toggle('active', showSeasonBand);
   hydratePosition();
   hydrateSize();
   // hydrateGuideOpen() calls setGuideOpen() which applies split + col widths
@@ -139,6 +166,13 @@ export function openNdviPanel() {
   // when the guide is closed.
   hydrateGuideOpen();
   renderForCurrentPlot();
+}
+
+export function toggleSeasonBand() {
+  showSeasonBand = !showSeasonBand;
+  localStorage.setItem('ndviSeasonBand', showSeasonBand ? '1' : '0');
+  $('ndviSeasonBtn')?.classList.toggle('active', showSeasonBand);
+  if (chart) chart.update();
 }
 
 export function closeNdviPanel() {
@@ -1023,6 +1057,7 @@ function renderChart(months, ndviRange) {
   chart = new window.Chart(canvas.getContext('2d'), {
     type: 'line',
     data: { labels: MONTH_LABELS, datasets },
+    plugins: [seasonPlugin],
     options: {
       responsive: true,
       maintainAspectRatio: false,
