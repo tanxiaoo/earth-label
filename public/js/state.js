@@ -28,8 +28,13 @@ export const state = {
   subPointResults:      {},      // {plotId: {idx: {code, label}}}
 
   // ── Google Earth Pro source tracking ──────────────────────────────────────
-  gepActive: false,   // true when user is viewing/using GEP for the current classification
-  gepYear:   '',      // year the user typed in the GEP year input (e.g. "2022")
+  gepActive: false,
+  gepYear:   '',
+
+  // ── Per-point timer (ephemeral — not persisted) ───────────────────────────
+  timerStartedAt:     null,  // Date.now() of current segment start; null = not running
+  timerAccumulatedMs: 0,     // ms banked before current segment (handles pause/resume)
+  timerPaused:        false,
 };
 
 export function setState(updates) {

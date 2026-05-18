@@ -430,6 +430,7 @@ export function goToPlot(index) {
   navigateToPlot(p);
   setState({ isFirstPlotLoad: false });
 
+  _startTimer();
   _syncKml(p);
   _updateImageSourceDisplay();
 
@@ -543,6 +544,59 @@ function _readActiveImageSource() {
     default:
       return { source: 'Google', date: 'current' };
   }
+}
+
+// ── Per-point timer ───────────────────────────────────────────────────────
+let _timerIntervalId = null;
+
+function _elapsedMs() {
+  const acc = state.timerAccumulatedMs || 0;
+  if (!state.timerStartedAt || state.timerPaused) return acc;
+  return acc + (Date.now() - state.timerStartedAt);
+}
+
+function _startTimer() {
+  clearInterval(_timerIntervalId);
+  setState({ timerStartedAt: Date.now(), timerAccumulatedMs: 0, timerPaused: false });
+  _timerIntervalId = setInterval(_tickTimer, 1000);
+  _tickTimer();
+  _refreshTimerBtn();
+}
+
+function _stopTimer() {
+  clearInterval(_timerIntervalId);
+  _timerIntervalId = null;
+  const seconds = Math.round(_elapsedMs() / 1000);
+  setState({ timerStartedAt: null, timerAccumulatedMs: 0, timerPaused: false });
+  _tickTimer();
+  return seconds;
+}
+
+function _tickTimer() {
+  const el = $('timerDisplay');
+  if (!el) return;
+  const total = Math.floor(_elapsedMs() / 1000);
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  el.textContent = `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+function _refreshTimerBtn() {
+  const btn = $('timerPauseBtn');
+  if (btn) btn.textContent = state.timerPaused ? '▶' : '⏸';
+}
+
+export function toggleTimerPause() {
+  if (state.timerPaused) {
+    setState({ timerStartedAt: Date.now(), timerPaused: false });
+    _timerIntervalId = setInterval(_tickTimer, 1000);
+  } else {
+    clearInterval(_timerIntervalId);
+    _timerIntervalId = null;
+    setState({ timerAccumulatedMs: _elapsedMs(), timerStartedAt: null, timerPaused: true });
+  }
+  _refreshTimerBtn();
+  _tickTimer();
 }
 
 // Builds the pixelMode payload for /kml/update from current state.
@@ -773,6 +827,7 @@ async function _submitPointPlot() {
   const plotId  = state.plots[plotIdx].id;
   const annotations = readAnnotationInputs();
   const { source: imageSource, date: imageDate } = _readActiveImageSource();
+  const timeSpentSeconds = _stopTimer();
   const result  = {
     code:        state.selectedClass,
     label:       cls?.label || '',
@@ -780,6 +835,7 @@ async function _submitPointPlot() {
     annotations,
     imageSource,
     imageDate,
+    timeSpentSeconds,
   };
 
   const plots = [...state.plots];
@@ -811,6 +867,7 @@ async function _submitPixelPlot() {
 
   const annotations = readAnnotationInputs();
   const { source: imageSource, date: imageDate } = _readActiveImageSource();
+  const timeSpentSeconds = _stopTimer();
   const result = {
     code:        agg.code,
     label:       agg.label,
@@ -818,6 +875,7 @@ async function _submitPixelPlot() {
     annotations,
     imageSource,
     imageDate,
+    timeSpentSeconds,
     subPoints:   Object.entries(spRes).map(([idx, v]) => ({ idx: Number(idx), ...v })),
   };
 
@@ -967,6 +1025,7 @@ window.app = {
   addAnnotationField, saveAnnotationFields,
   exportCSV, exportGeoJSON,
   openGoogleEarth, onGeRangeInput, toggleGepMode, onGepYearInput,
+  toggleTimerPause,
   toggleNdviPanel, openNdviPanel, closeNdviPanel,
   fetchNdvi, refreshNdvi, saveNdviGuide, resetNdviGuide,
   toggleNdviGuide, onNdviYearChange,

@@ -33,8 +33,9 @@ const BASE_CSV_COLUMNS = [
   ['class_code',      p => p.resultCode ?? ''],
   ['class_label',     p => p.resultLabel ?? ''],
   ['confidence',      p => p.confidence ?? ''],
-  ['image_source',    p => state.project?.results?.[p.id]?.imageSource ?? ''],
-  ['image_date',      p => state.project?.results?.[p.id]?.imageDate   ?? ''],
+  ['image_source',    p => state.project?.results?.[p.id]?.imageSource     ?? ''],
+  ['image_date',      p => state.project?.results?.[p.id]?.imageDate       ?? ''],
+  ['time_spent_s',    p => state.project?.results?.[p.id]?.timeSpentSeconds ?? ''],
   ['assessment_mode', () => state.assessmentMode],
 ];
 
@@ -158,8 +159,9 @@ function _geoJsonProps(plot) {
     class_code:      plot.resultCode ?? '',
     class_label:     plot.resultLabel ?? '',
     confidence:      plot.confidence ?? '',
-    image_source:    state.project?.results?.[plot.id]?.imageSource ?? '',
-    image_date:      state.project?.results?.[plot.id]?.imageDate   ?? '',
+    image_source:     state.project?.results?.[plot.id]?.imageSource     ?? '',
+    image_date:       state.project?.results?.[plot.id]?.imageDate       ?? '',
+    time_spent_s:     state.project?.results?.[plot.id]?.timeSpentSeconds ?? null,
     ...annoProps,
     project_name:    state.project?.name || '',
     saved_at:        state.project?.results?.[plot.id]?.savedAt ?? '',
