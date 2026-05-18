@@ -514,9 +514,10 @@
 
   <div class="submit-section">
     <small id="imageSrcIndicator" style="display:block;text-align:center;color:var(--text-dim);font-size:11px;margin-bottom:6px;letter-spacing:.01em;"></small>
-    <div style="display:flex;align-items:center;justify-content:space-between;background:#1a1d2e;border-radius:6px;padding:5px 10px;margin-bottom:6px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;background:#1a1d2e;border-radius:6px;padding:5px 10px;margin-bottom:6px;position:relative;">
       <span style="font-size:11px;color:var(--text-dim);">⏱ Time</span>
       <span id="timerDisplay" style="font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--text);">0:00</span>
+      <span id="timerResumedNotif" style="position:absolute;left:50%;transform:translateX(-50%);bottom:calc(100% + 4px);background:#22c55e;color:#fff;font-size:10px;padding:2px 7px;border-radius:4px;pointer-events:none;opacity:0;transition:opacity .3s;">▶ resumed</span>
       <button id="timerPauseBtn" onclick="app.toggleTimerPause()" title="Pause / Resume timer"
               style="background:transparent;border:1px solid #3a3f55;border-radius:4px;color:var(--text-dim);cursor:pointer;font-size:13px;padding:1px 7px;line-height:1.4;">⏸</button>
     </div>

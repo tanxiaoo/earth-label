@@ -86,6 +86,9 @@ async function init() {
 
 // ── Project list view ─────────────────────────────────────────────────────
 export function showProjectListView() {
+  _stopTimer();
+  const td = $('timerDisplay');
+  if (td) td.textContent = '0:00';
   $('sidebar-projects-view').style.display = 'flex';
   $('sidebar-plots-view').style.display    = 'none';
   refreshProjectList();
@@ -586,6 +589,17 @@ function _refreshTimerBtn() {
   if (btn) btn.textContent = state.timerPaused ? '▶' : '⏸';
 }
 
+// If the timer is paused when the user starts classifying, resume it silently
+// and flash a brief "resumed" notification so they know it's running again.
+function _autoResumeTimer() {
+  if (!state.timerPaused) return;
+  toggleTimerPause();
+  const notif = $('timerResumedNotif');
+  if (!notif) return;
+  notif.style.opacity = '1';
+  setTimeout(() => { notif.style.opacity = '0'; }, 1800);
+}
+
 export function toggleTimerPause() {
   if (state.timerPaused) {
     setState({ timerStartedAt: Date.now(), timerPaused: false });
@@ -725,8 +739,8 @@ export function computePlotLabel(plotId) {
 
 // ── Classification — Point Mode ───────────────────────────────────────────
 export function selectClass(code) {
+  _autoResumeTimer();
   if (state.assessmentMode === 'pixel') {
-    // In pixel mode, selecting a class immediately classifies the current sub-point
     _classifySubPoint(code);
     return;
   }
