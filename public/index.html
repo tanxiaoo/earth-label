@@ -538,8 +538,7 @@
     <span class="ndvi-title"><span class="ndvi-icon" aria-hidden="true"></span>NDVI<span class="ndvi-source" title="Monthly mean NDVI from Sentinel-2 L2A (10 m), queried via the Sentinel Hub Statistical API. Cloud-masked; missing months indicate no valid observations.">Sentinel-2 · monthly mean</span></span>
     <div class="ndvi-header-controls">
       <select id="ndviYear" class="ndvi-year-select" title="Year" onchange="app.onNdviYearChange()"></select>
-      <button id="ndviSeasonBtn" onclick="app.toggleSeasonBand()" title="Show / hide growing season band (Apr – Sep)"
-              style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;border:1px solid #3a3f55;background:transparent;color:var(--text-dim);cursor:pointer;letter-spacing:.03em;">Season</button>
+      <button id="ndviSeasonBtn" onclick="app.toggleSeasonBand()" title="Show / hide growing season band (Apr – Sep)">Season</button>
       <button class="icon-btn" id="ndviRefreshBtn" onclick="app.refreshNdvi()" title="Re-fetch (overwrites cache)">↻</button>
       <button class="icon-btn" onclick="app.closeNdviPanel()" title="Close">✕</button>
     </div>
