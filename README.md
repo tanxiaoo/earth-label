@@ -1,6 +1,6 @@
 # EarthLabel
 
-**Satellite Image Interpretation Platform — v2**
+**Satellite Image Interpretation Platform — v2.2.0**
 
 A self-hosted web app for satellite image interpretation and land-cover validation. Built as a lighter, faster alternative to Collect Earth Online with multi-source high-resolution imagery, dynamic class schemas, and GIS file support.
 

@@ -7,28 +7,37 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+---
+
+## [2.2.0] - 2026-05-18
+
 ### Added
 - **Export — per-sub-point class columns** (`sp_0` … `sp_N-1`): one CSV column per grid position containing the class label assigned to that sub-point (9 cols for 3×3, 25 for 5×5). Human-readable without parsing `sub_points_json`. (`public/js/export.js`)
 - **Export — sub-point agreement stats**: `sub_point_total`, `sub_point_dominant_count`, `sub_point_agreement_pct` added to both CSV and GeoJSON — makes majority-vote confidence explicit (e.g. 7/9 = 77.8%). (`public/js/export.js`)
 - **Image source + date logging**: on submit, the active basemap and its selected year/date are captured automatically (`image_source`, `image_date`) and stored in the result. Exported as two new columns in CSV and GeoJSON. (`public/js/app.js`, `public/js/export.js`)
-- **📡 GEP toggle button** in toolbar: marks that Google Earth Pro was used as the reference for the current classification. A year input appears so the user can record the year seen in GEP's time slider. Source is saved as `"Google Earth Pro"` with the typed year (or blank if omitted). (`public/js/app.js`, `public/index.html`)
-- **Image source indicator**: live text label above the Submit button showing which basemap and year will be recorded (e.g. `Planet · 2024-06`, `ESRI Wayback · 2022`, `Google Earth Pro · 2021`). Updates on every basemap switch, year change, and plot navigation. (`public/js/app.js`, `public/index.html`)
-- **GEP pixel-mode KML sync**: in pixel mode the `/kml/current.kml` response now includes a UA square polygon outline and one colour-coded placemark per sub-point (orange = currently selected, class colour = classified, grey = unclassified). Updates on every sub-point classification and selection. (`server/routes/kml.js`, `public/js/api.js`, `public/js/app.js`)
-- **Per-point time tracking**: a MM:SS live timer appears above the Submit button. Starts automatically on each plot navigation, resets on the next plot. `⏸ / ▶` Pause/Resume button lets the user stop the clock during interruptions without losing accumulated time. `time_spent_s` (integer seconds) stored in the result and exported as a new column in CSV and GeoJSON. (`public/js/app.js`, `public/js/state.js`, `public/index.html`, `public/js/export.js`)
+- **GEP toggle button** in toolbar: marks that Google Earth Pro was used as the reference. A year input appears so the user can record the year from GEP's time slider. Source saved as `"Google Earth Pro"` with the typed year (or blank). (`public/js/app.js`, `public/index.html`)
+- **Image source indicator**: live text label above the Submit button showing which basemap and year will be recorded (e.g. `Planet · 2024-06`). Updates on every basemap switch, year change, and plot navigation. (`public/js/app.js`, `public/index.html`)
+- **GEP pixel-mode KML sync**: in pixel mode the `/kml/current.kml` response now includes a UA square polygon outline and one colour-coded placemark per sub-point (orange = selected, class colour = classified, grey = unclassified). Updates on every sub-point classification and selection. (`server/routes/kml.js`, `public/js/api.js`, `public/js/app.js`)
+- **Per-point time tracking**: a MM:SS live timer in the classify panel. Starts automatically on each plot navigation, resets on next plot. Pause/Resume (⏸/▶) button excludes idle time. `time_spent_s` (integer seconds) stored in result and exported in CSV/GeoJSON. (`public/js/app.js`, `public/js/state.js`, `public/index.html`, `public/js/export.js`)
+- **NDVI growing season band**: a **Season** toggle button in the NDVI panel header overlays a subtle green shaded band over the growing season months (Apr–Sep) on the chart. Off by default; state persists in `localStorage`. (`public/js/ndvi-panel.js`, `public/css/app.css`, `public/index.html`)
+- **Sentinel Hub / CDSE setup guide**: step-by-step instructions for obtaining OAuth credentials and enabling the NDVI panel added to `README.md` Quick Start and `docs/USER_GUIDE.md`. (`README.md`, `docs/USER_GUIDE.md`)
 
 ### Fixed
-- UA columns (`ua_size_m`, `sub_point_grid`, `sub_points_json`, `sub_point_total`, `sub_point_dominant_count`, `sub_point_agreement_pct`, `sp_N`) no longer appear in point-mode CSV exports — headers and values are now pixel-mode only. (`public/js/export.js`)
-- GEP zoom slider and auto-advance broken after incorrect `<NetworkLinkControl>` change — restored `<LookAt>` inside `<Document>`, which the `<flyToView>1</flyToView>` directive in `google_earth_link.kml` uses for camera positioning on every NetworkLink poll. (`server/routes/kml.js`)
-- Timer continued running after the user returned to the project list; now stops and resets to `0:00` on `← Projects`. (`public/js/app.js`)
-- Timer auto-resumes when the user classifies a point while paused; a brief green **"▶ resumed"** notification fades in above the timer row. (`public/js/app.js`, `public/index.html`)
-- Sub-points remaining count in the Submit button now counts down after every individual sub-point classification (was only updating when all sub-points were done). (`public/js/app.js`)
-- Sub-point circle fill colours not updating after re-classification
-- Submit button unresponsive on the last unclassified plot
-- Reference label falling back incorrectly when `ref_label` was an empty string
+- UA columns (`ua_size_m`, `sub_point_grid`, `sub_points_json`, `sub_point_total`, `sub_point_dominant_count`, `sub_point_agreement_pct`, `sp_N`) no longer appear as headers in point-mode CSV exports. (`public/js/export.js`)
+- GEP zoom slider and auto-advance broken — restored `<LookAt>` inside `<Document>` which `<flyToView>1</flyToView>` in `google_earth_link.kml` uses for camera positioning on every NetworkLink poll. (`server/routes/kml.js`)
+- Timer continued running when the user returned to the project list; now stops and resets to `0:00`. (`public/js/app.js`)
+- Timer auto-resumes when the user classifies while paused; a brief green "▶ resumed" notification appears. (`public/js/app.js`, `public/index.html`)
+- Sub-points remaining count in the Submit button now decrements after every classification (was frozen at the initial total). (`public/js/app.js`)
+- Season button active state not visible — inline `style` attribute was overriding the CSS `.active` rule; moved all styling to CSS. (`public/index.html`, `public/css/app.css`)
+- Sub-point circle fill colours not updating after re-classification. (`public/js/app.js`)
+- Submit button unresponsive on the last unclassified plot. (`public/js/app.js`)
+- Reference label falling back incorrectly when `ref_label` was an empty string. (`public/js/app.js`)
 
 ### Docs
 - UA pixel-mode workflow added to `docs/USER_GUIDE.md`
 - Sub-point grid + aggregation rules added to `docs/GIS_FORMATS.md`
+- Sentinel Hub credentials setup guide added to `README.md` and `docs/USER_GUIDE.md`
+- `CHANGELOG.md` added covering full project history v1.0.0 → v2.2.0
 
 ---
 
