@@ -1,9 +1,16 @@
 import { state } from './state.js';
 
 let mapL, mapR;
+let _onSubPointClick = null;   // registered by app.js
+
+export function registerSubPointClickHandler(fn) { _onSubPointClick = fn; }
 let markerL, squareL, markerR, squareR;
 let layerL, layerR;
 let geomLayer = null;  // polygon/geometry overlay
+
+// Sub-point marker layers (pixel mode)
+let subPointLayersL = [];
+let subPointLayersR = [];
 
 // ── BingLayer ────────────────────────────────────────────────────────────
 const BingLayer = L.TileLayer.extend({
@@ -85,34 +92,196 @@ function _sync(src, tgt) {
   tgt._isSyncing = false;
 }
 
+// ── Geo helpers ───────────────────────────────────────────────────────────
+// Convert a square of sizeM × sizeM (meters) at the given latitude to
+// degree offsets. Returns {dlat, dlon} where each is the half-side.
+function metersToDeg(sizeM, lat) {
+  const half = sizeM / 2;
+  const dlat = half / 111320;
+  const dlon = half / (111320 * Math.cos(lat * Math.PI / 180));
+  return { dlat, dlon };
+}
+
+// Generate the {lat, lon, idx} positions for the sub-point grid inside the UA square.
+// gridStr: "3x3" | "5x5"  →  rows×cols evenly spanning the full UA square
+function generateSubPointPositions(centerLat, centerLon, sizeM, gridStr) {
+  const n    = parseInt(gridStr) || 5; // "5x5" → 5
+  const { dlat, dlon } = metersToDeg(sizeM, centerLat);
+  const positions = [];
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      const fR  = n > 1 ? r / (n - 1) : 0.5;
+      const fC  = n > 1 ? c / (n - 1) : 0.5;
+      positions.push({
+        lat: centerLat + dlat * (1 - 2 * fR),   // top → bottom
+        lon: centerLon + dlon * (-1 + 2 * fC),  // left → right
+        idx: r * n + c,
+      });
+    }
+  }
+  return positions;
+}
+
 // ── Navigate to plot ──────────────────────────────────────────────────────
 export function navigateToPlot(plot) {
-  const zoom = state.isFirstPlotLoad ? 17 : mapL.getZoom();
+  const zoom = state.isFirstPlotLoad ? 19 : mapL.getZoom();
   mapL.setView([plot.lat, plot.lon], zoom);
-  if (state.isSplitMode) mapR.setView([plot.lat, plot.lon], state.isFirstPlotLoad ? 17 : mapR.getZoom(), { animate:false });
+  if (state.isSplitMode) mapR.setView([plot.lat, plot.lon], state.isFirstPlotLoad ? 19 : mapR.getZoom(), { animate:false });
 
-  // Markers
-  if (markerL) mapL.removeLayer(markerL);
-  if (squareL) mapL.removeLayer(squareL);
-  if (markerR) mapR.removeLayer(markerR);
-  if (squareR) mapR.removeLayer(squareR);
-  if (geomLayer) { mapL.removeLayer(geomLayer); geomLayer = null; }
+  // Remove previous layers
+  _clearPlotLayers();
 
-  const dotStyle = { radius:6, color:'#fff', weight:2, fillColor:'#3b82f6', fillOpacity:.9 };
-  markerL = L.circleMarker([plot.lat, plot.lon], dotStyle).addTo(mapL);
-  markerR = L.circleMarker([plot.lat, plot.lon], dotStyle).addTo(mapR);
+  const isPixel = state.assessmentMode === 'pixel';
 
-  // 70m reference square
-  const d = 0.00035;
-  const rect = [[plot.lat - d, plot.lon - d],[plot.lat + d, plot.lon + d]];
-  const rectStyle = { color:'#f59e0b', weight:2, fillOpacity:.05, dashArray:'5,5' };
-  squareL = L.rectangle(rect, rectStyle).addTo(mapL);
-  squareR = L.rectangle(rect, rectStyle).addTo(mapR);
+  if (isPixel) {
+    _renderPixelPlot(plot);
+  } else {
+    _renderPointPlot(plot);
+  }
 
   // Polygon geometry overlay (if plot has geometry from GIS import)
   if (plot.geometry) {
     const geojsonStyle = { color:'#00e5ff', weight:2, fillOpacity:.1, fillColor:'#00e5ff' };
     geomLayer = L.geoJSON(plot.geometry, { style: () => geojsonStyle }).addTo(mapL);
+  }
+}
+
+function _clearPlotLayers() {
+  if (markerL)  { mapL.removeLayer(markerL);  markerL  = null; }
+  if (squareL)  { mapL.removeLayer(squareL);  squareL  = null; }
+  if (markerR)  { mapR.removeLayer(markerR);  markerR  = null; }
+  if (squareR)  { mapR.removeLayer(squareR);  squareR  = null; }
+  if (geomLayer){ mapL.removeLayer(geomLayer); geomLayer = null; }
+  subPointLayersL.forEach(m => mapL.removeLayer(m));
+  subPointLayersR.forEach(m => mapR.removeLayer(m));
+  subPointLayersL = [];
+  subPointLayersR = [];
+}
+
+// Point mode: simple center dot, no UA square
+function _renderPointPlot(plot) {
+  const dotStyle = { radius:6, color:'#fff', weight:2, fillColor:'#3b82f6', fillOpacity:.9 };
+  markerL = L.circleMarker([plot.lat, plot.lon], dotStyle).addTo(mapL);
+  markerR = L.circleMarker([plot.lat, plot.lon], dotStyle).addTo(mapR);
+}
+
+// Pixel mode: correctly-sized UA square + sub-point grid
+function _renderPixelPlot(plot) {
+  const { dlat, dlon } = metersToDeg(state.plotSizeM, plot.lat);
+
+  // UA square (yellow, dashed)
+  const rect = [
+    [plot.lat - dlat, plot.lon - dlon],
+    [plot.lat + dlat, plot.lon + dlon],
+  ];
+  const rectStyle = { color:'#f59e0b', weight:2, fillOpacity:.04, dashArray:'5,5' };
+  squareL = L.rectangle(rect, rectStyle).addTo(mapL);
+  squareR = L.rectangle(rect, rectStyle).addTo(mapR);
+
+  // UA size label tooltip (like CEO's "20 m" / "30 m" bar)
+  const labelLatLon = [plot.lat - dlat, plot.lon];
+  const tooltip = L.tooltip({ permanent:true, direction:'bottom', className:'ua-size-tooltip', offset:[0, 4] })
+    .setContent(`${state.plotSizeM} m`);
+  squareL.bindTooltip(tooltip).openTooltip();
+
+  // Center marker (blue dot)
+  const dotStyle = { radius:5, color:'#fff', weight:2, fillColor:'#3b82f6', fillOpacity:.9 };
+  markerL = L.circleMarker([plot.lat, plot.lon], dotStyle).addTo(mapL);
+  markerR = L.circleMarker([plot.lat, plot.lon], dotStyle).addTo(mapR);
+
+  // Sub-point grid
+  _renderSubPoints(plot);
+}
+
+// Draw sub-point circles; colour them if already classified
+function _renderSubPoints(plot) {
+  const positions  = generateSubPointPositions(plot.lat, plot.lon, state.plotSizeM, state.subPointGrid);
+  const plotResults = (state.subPointResults[plot.id] || {});
+  const schema      = state.project?.classSchema || [];
+
+  positions.forEach(({ lat, lon, idx }) => {
+    const spResult = plotResults[idx];
+    const cls      = spResult ? schema.find(c => String(c.code) === String(spResult.code)) : null;
+
+    const styleL = _subPointStyle(idx, spResult, cls);
+    const styleR = { ...styleL };
+
+    const mL = L.circleMarker([lat, lon], styleL).addTo(mapL);
+    const mR = L.circleMarker([lat, lon], styleR).addTo(mapR);
+
+    mL.on('click', () => { if (_onSubPointClick) _onSubPointClick(idx); });
+
+    subPointLayersL.push(mL);
+    subPointLayersR.push(mR);
+  });
+}
+
+function _subPointStyle(idx, spResult, cls) {
+  const isSelected = idx === state.selectedSubPointIdx;
+  if (isSelected) {
+    // Highlighted (currently active)
+    return { radius:5, color:'#fff', weight:2, fillColor:'#f59e0b', fillOpacity:1 };
+  }
+  if (spResult && cls) {
+    // Classified — use class colour
+    return { radius:4, color:'rgba(255,255,255,0.6)', weight:1, fillColor: cls.color || '#888', fillOpacity:.9 };
+  }
+  if (spResult) {
+    // Classified but class not in schema (edge case)
+    return { radius:4, color:'rgba(255,255,255,0.6)', weight:1, fillColor:'#888', fillOpacity:.9 };
+  }
+  // Unclassified — solid black dot with thin white border
+  return { radius:4, color:'rgba(255,255,255,0.5)', weight:1, fillColor:'#111', fillOpacity:1 };
+}
+
+// Refresh one sub-point's visual (call after classifying it)
+export function refreshSubPoint(plotId, idx) {
+  const positions   = generateSubPointPositions(
+    state.plots[state.currentIndex]?.lat,
+    state.plots[state.currentIndex]?.lon,
+    state.plotSizeM, state.subPointGrid
+  );
+  const plotResults = state.subPointResults[plotId] || {};
+  const schema      = state.project?.classSchema || [];
+  const spResult    = plotResults[idx];
+  const cls         = spResult ? schema.find(c => String(c.code) === String(spResult.code)) : null;
+
+  const mL = subPointLayersL[idx];
+  const mR = subPointLayersR[idx];
+  if (!mL || !mR) return;
+
+  const style = _subPointStyle(idx, spResult, cls);
+  mL.setStyle(style);
+  mR.setStyle(style);
+}
+
+// Highlight the newly selected sub-point (deselect previous)
+export function highlightSubPoint(prevIdx, nextIdx) {
+  const plot       = state.plots[state.currentIndex];
+  if (!plot) return;
+  const plotResults = state.subPointResults[plot.id] || {};
+  const schema      = state.project?.classSchema || [];
+
+  // Deselect previous
+  if (prevIdx != null && subPointLayersL[prevIdx]) {
+    const pr  = plotResults[prevIdx];
+    const cls = pr ? schema.find(c => String(c.code) === String(pr.code)) : null;
+    const st  = _subPointStyle(prevIdx, pr, cls);
+    subPointLayersL[prevIdx].setStyle(st);
+    subPointLayersR[prevIdx].setStyle(st);
+  }
+  // Select next
+  if (nextIdx != null && subPointLayersL[nextIdx]) {
+    const st = _subPointStyle(nextIdx, plotResults[nextIdx], null);  // pass null cls to force highlight
+    const hiStyle = { radius:5, color:'#fff', weight:2, fillColor:'#f59e0b', fillOpacity:1 };
+    subPointLayersL[nextIdx].setStyle(hiStyle);
+    subPointLayersR[nextIdx].setStyle(hiStyle);
+    // Pan to sub-point
+    const positions = generateSubPointPositions(plot.lat, plot.lon, state.plotSizeM, state.subPointGrid);
+    if (positions[nextIdx]) {
+      const { lat, lon } = positions[nextIdx];
+      mapL.panTo([lat, lon], { animate:true, duration:0.2 });
+    }
   }
 }
 

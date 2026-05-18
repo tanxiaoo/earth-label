@@ -41,12 +41,13 @@ earth-label/
 │   ├── index.html
 │   ├── css/app.css
 │   └── js/                      ES modules
-│       ├── api.js               fetch() wrappers
-│       ├── state.js             single mutable state object
-│       ├── map.js               Leaflet dual-map, tile layers, navigation
-│       ├── classes.js           class-button rendering + class editor modal
-│       ├── export.js            CSV / GeoJSON / project-file export
-│       └── app.js               main entry, orchestration, keyboard shortcuts
+│       ├── api.js                fetch() wrappers
+│       ├── state.js              single mutable state object
+│       ├── map.js                Leaflet dual-map, tile layers, navigation
+│       ├── classes.js            class-button rendering + class editor modal
+│       ├── annotation-fields.js  annotation-field sidebar inputs + editor modal
+│       ├── export.js             CSV / GeoJSON / project-file export
+│       └── app.js                main entry, orchestration, keyboard shortcuts
 └── data/projects/               (gitignored) one .json file per project
 ```
 
@@ -69,10 +70,11 @@ A single mutable object in `public/js/state.js`:
 
 ```js
 export const state = {
-  project:          null,    // full project from server, with classSchema, plots, results
+  // ── Project / plot ───────────────────────────────────────────────────────
+  project:          null,    // full project from server (classSchema, annotationFields, plots, results)
   plots:            [],      // project.plots merged with current results
-  currentIndex:     -1,      // index into state.plots
-  selectedClass:    null,    // currently chosen class code
+  currentIndex:     -1,
+  selectedClass:    null,
   selectedConfidence: null,
   currentFilter:    'all',
   projectSort:      'recent',
@@ -80,8 +82,20 @@ export const state = {
   leftBasemap:      'google',
   rightBasemap:     'sentinel2',
   isFirstPlotLoad:  true,
-  presets:          [],     // built-in + user presets, cached from /api/presets
-  geRange:          1000,   // GE Pro / GE Web camera distance, meters; persisted to localStorage
+  presets:          [],
+  geRange:          1000,    // GE camera distance (m); persisted to localStorage
+  ndviPanelOpen:    false,
+
+  // ── Assessment / UA (per project, persisted server-side) ─────────────────
+  assessmentMode:       'point',    // 'point' | 'pixel'
+  plotSizeM:            30,         // UA square side in metres (pixel mode)
+  subPointGrid:         '5x5',      // '3x3' | '5x5'
+  aggregationRule:      'majority', // 'majority' | 'threshold'
+  aggregationThreshold: 0.5,        // fraction (threshold rule only)
+
+  // ── Sub-point tracking (pixel mode, ephemeral) ───────────────────────────
+  selectedSubPointIdx:  null,       // active sub-point index
+  subPointResults:      {},         // { plotId: { idx: { code, label } } }
 };
 
 export function setState(updates) { Object.assign(state, updates); }
@@ -120,6 +134,10 @@ A project file in `data/projects/<id>.json`:
     { "code": 20, "label": "Forest", "color": "#548235", "key": "1" },
     …
   ],
+  "annotationFields": [
+    { "key": "notes",       "label": "Notes",        "type": "text"   },
+    { "key": "cloud_cover", "label": "Cloud cover?", "type": "binary" }
+  ],
   "plots": [
     {
       "id":        "1",
@@ -132,10 +150,24 @@ A project file in `data/projects/<id>.json`:
     },
     …
   ],
+  // ── UA / Assessment settings (v2.1) ──────────────────────────────────────
+  "assessmentMode":       "pixel",    // "point" | "pixel"
+  "plotSizeM":            30,         // UA square side in metres
+  "subPointGrid":         "5x5",      // "3x3" | "5x5"
+  "aggregationRule":      "majority", // "majority" | "threshold"
+  "aggregationThreshold": 0.5,        // fraction (threshold rule only)
+
   "results": {
     "1": {
       "code": 20, "label": "Forest",
-      "confidence": "High", "notes": "",
+      "confidence": "High",
+      "annotations": { "notes": "dense canopy", "cloud_cover": "no" },
+      // pixel mode only:
+      "subPoints": [
+        { "idx": 0, "code": 20, "label": "Forest" },
+        { "idx": 1, "code": 20, "label": "Forest" },
+        …
+      ],
       "savedAt": "2026-05-06T11:05:23.000Z"
     },
     …
@@ -146,6 +178,9 @@ A project file in `data/projects/<id>.json`:
 - `plots[]` is set once at creation and immutable thereafter
 - `results{}` grows as the user classifies; keyed by `plot.id`
 - `classSchema[]` can be edited at any time without breaking existing results (results reference codes)
+- `annotationFields[]` is editable at any time. Field `type` is `'text'` or `'binary'`. Binary values are stored as `'yes'`, `'no'`, or empty. **Backward compat:** projects without `annotationFields` default to `[{key:'notes',…}]`; legacy `result.notes` maps to `result.annotations.notes`.
+- UA fields (`assessmentMode`, `plotSizeM`, `subPointGrid`, `aggregationRule`, `aggregationThreshold`) are stored at the project root and are editable at any time via PATCH `/api/projects/:id` with `{uaSettings:{…}}`. **Backward compat:** projects without these fields default to `assessmentMode:'point'` on load.
+- In pixel mode, `result.subPoints[]` stores every individual sub-point classification. The aggregated `result.code` / `result.label` is the plot-level result derived by the configured aggregation rule.
 
 ---
 
@@ -173,11 +208,11 @@ User presets are stored in `data/user_presets.json` (gitignored) and merged with
 |--------|-----------------------------------|--------------------------------------------------------|---------|
 | GET    | `/api/projects`                   | —                                                      | array of summaries |
 | GET    | `/api/projects/:id`               | —                                                      | full project |
-| POST   | `/api/projects`                   | `multipart` (`name`, `classSchema` JSON, `file`?)       | `{id}` |
-| POST   | `/api/projects/json`              | `{name, classSchema, plots}`                           | `{id}` |
+| POST   | `/api/projects`                   | `multipart` (`name`, `classSchema` JSON, `annotationFields`? JSON, `uaSettings`? JSON, `file`?) | `{id}` |
+| POST   | `/api/projects/json`              | `{name, classSchema, annotationFields?, uaSettings?, plots}` | `{id}` |
 | POST   | `/api/projects/parse-file`        | `multipart` (`file`)                                   | `{plots, count}` |
 | POST   | `/api/projects/import`            | `multipart` (`file`: project json)                     | `{id}` |
-| PATCH  | `/api/projects/:id`               | `{plotId?, result?, classSchema?, name?, lastUsed?}`   | `{success:true}` |
+| PATCH  | `/api/projects/:id`               | `{plotId?, result?, classSchema?, annotationFields?, uaSettings?, ndviCacheUpdate?, name?, lastUsed?}` | `{success:true}` |
 | DELETE | `/api/projects/:id`               | —                                                      | `{success:true}` |
 | GET    | `/api/projects/:id/export`        | —                                                      | downloads `.json` |
 

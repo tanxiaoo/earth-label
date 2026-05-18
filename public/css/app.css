@@ -109,6 +109,7 @@ select.mini-select option { color:#000;background:#fff; }
 .nav-btn.prev:hover { background:#3a3d4a; }
 .nav-btn.next { background:var(--accent);color:#fff; }
 .nav-btn.next:hover { background:var(--accent-hover); }
+#btn-gep.gep-active { background:#1e3a5f;color:#60a5fa;outline:1px solid #3b82f6; }
 
 .plot-counter { font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-dim);margin-left:auto; }
 
@@ -266,6 +267,55 @@ body.split-mode .global-basemaps { display:none !important; }
 .class-editor-row .del-btn { background:transparent;border:1px solid var(--panel-border);color:var(--danger);border-radius:4px;padding:3px 8px;cursor:pointer;font-size:11px; }
 .class-editor-row .del-btn:hover { background:rgba(239,68,68,.1); }
 
+/* annotation fields — sidebar inputs */
+.annotation-field { margin-bottom:10px; }
+.annotation-field:last-child { margin-bottom:0; }
+.annotation-label {
+  display:block;font-size:11px;font-weight:600;color:var(--text-dim);
+  text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;
+}
+.annotation-field textarea {
+  width:100%;height:48px;background:#0f1117;border:1px solid var(--panel-border);
+  border-radius:6px;color:var(--text);padding:8px;font-family:'DM Sans',sans-serif;font-size:12px;resize:none;
+}
+.annotation-field textarea:focus { outline:none;border-color:var(--accent); }
+.binary-row { display:flex;gap:6px; }
+.bin-btn {
+  flex:1;padding:6px;font-size:11px;font-weight:600;font-family:'DM Sans',sans-serif;
+  border:1px solid var(--panel-border);background:transparent;color:var(--text-dim);
+  border-radius:5px;cursor:pointer;transition:all .15s;
+}
+.bin-btn:hover  { border-color:var(--text-dim);color:var(--text); }
+.bin-btn.selected { background:var(--accent);color:#fff;border-color:var(--accent); }
+
+/* annotation fields — editor modal rows */
+.annotation-editor-row {
+  display:flex;align-items:center;gap:8px;padding:8px;
+  background:rgba(255,255,255,.03);border-radius:6px;margin-bottom:6px;
+}
+.annotation-editor-row input[type=text],
+.annotation-editor-row select {
+  background:#0f1117;border:1px solid var(--panel-border);border-radius:4px;
+  color:var(--text);padding:4px 8px;font-family:'DM Sans',sans-serif;font-size:12px;
+}
+.annotation-editor-row input[type=text]:focus,
+.annotation-editor-row select:focus { outline:none;border-color:var(--accent); }
+.annotation-editor-row .key-input   { width:140px; }
+.annotation-editor-row .label-input { flex:1; }
+.annotation-editor-row .type-input  { width:110px; }
+.annotation-editor-row .del-btn { background:transparent;border:1px solid var(--panel-border);color:var(--danger);border-radius:4px;padding:3px 8px;cursor:pointer;font-size:11px; }
+.annotation-editor-row .del-btn:hover { background:rgba(239,68,68,.1); }
+
+.annotation-editor-header {
+  display:flex;align-items:center;gap:8px;padding:4px 8px;margin-bottom:4px;
+  font-size:10px;font-weight:700;color:var(--text-dim);
+  text-transform:uppercase;letter-spacing:.5px;
+}
+.annotation-editor-header .key-input   { width:140px; }
+.annotation-editor-header .label-input { flex:1; }
+.annotation-editor-header .type-input  { width:110px; }
+.annotation-editor-header .del-btn-spacer { width:28px; }
+
 /* key status badges */
 .key-status { font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;margin-left:6px; }
 .key-status.set   { background:rgba(34,197,94,.15);color:var(--success); }
@@ -281,6 +331,51 @@ body.split-mode .global-basemaps { display:none !important; }
   font-size:16px;padding:4px 6px;border-radius:4px;line-height:1;transition:all .15s;
 }
 .icon-btn:hover { color:var(--text);background:rgba(255,255,255,.08); }
+#ndviSeasonBtn {
+  font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;
+  border:1px solid #3a3f55;background:transparent;color:var(--text-dim);
+  cursor:pointer;letter-spacing:.03em;
+  transition:color .15s, background .15s, border-color .15s;
+}
+#ndviSeasonBtn:hover { color:var(--text);background:rgba(255,255,255,.08); }
+#ndviSeasonBtn.active { color:#22c55e;border-color:#22c55e;background:rgba(34,197,94,.12); }
+
+/* ── UA MODE BADGE ───────────────────────────────────────────────────────── */
+.ua-mode-badge {
+  display:inline-block;padding:2px 8px;
+  background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);
+  color:#f59e0b;border-radius:4px;font-size:10px;font-weight:700;
+  font-family:'JetBrains Mono',monospace;letter-spacing:.3px;
+}
+
+/* ── SUB-POINT PROGRESS (classify panel) ─────────────────────────────────── */
+#subPointInfo {
+  padding:6px 0 2px;
+}
+.sp-progress-label {
+  font-size:11px;color:var(--text-dim);margin-bottom:5px;
+}
+.sp-dots {
+  display:flex;flex-wrap:wrap;gap:3px;
+}
+.sp-dot {
+  display:inline-block;width:12px;height:12px;border-radius:2px;
+  transition:background .15s,border .15s;cursor:default;
+}
+
+/* ── UA SIZE TOOLTIP (Leaflet) ───────────────────────────────────────────── */
+.ua-size-tooltip {
+  background:rgba(15,17,23,.85) !important;
+  border:1px solid #f59e0b !important;
+  border-radius:4px !important;
+  color:#f59e0b !important;
+  font-family:'JetBrains Mono',monospace !important;
+  font-size:10px !important;
+  font-weight:700 !important;
+  padding:2px 6px !important;
+  white-space:nowrap !important;
+}
+.ua-size-tooltip::before { display:none !important; }
 
 /* Google Earth zoom slider in the toolbar */
 .ge-range {
@@ -306,3 +401,277 @@ body.split-mode .global-basemaps { display:none !important; }
   font-family:'JetBrains Mono',monospace;font-size:11px;
   color:var(--text-dim);min-width:54px;text-align:right;
 }
+
+/* ── FLOATING NDVI PANEL ────────────────────────────────────────────────── */
+.ndvi-panel {
+  position:fixed;
+  right:24px;bottom:24px;
+  width:540px;height:540px;            /* default closed = square */
+  min-width:320px;min-height:280px;
+  background:var(--panel);
+  border:1px solid var(--panel-border);
+  border-radius:10px;
+  box-shadow:0 18px 50px rgba(0,0,0,.55), 0 2px 8px rgba(0,0,0,.4);
+  z-index:1000;
+  display:flex;flex-direction:column;
+  font-size:13px;
+  overflow:hidden;
+  transition:width .2s ease-out;
+}
+.ndvi-panel.guide-open { min-width:520px; }
+.ndvi-panel.hidden { display:none; }
+
+.ndvi-header {
+  padding:10px 14px;
+  border-bottom:1px solid var(--panel-border);
+  display:flex;justify-content:space-between;align-items:center;gap:8px;
+  cursor:grab;user-select:none;
+  background:linear-gradient(135deg,#1e2130,#1a1d27);
+  border-radius:10px 10px 0 0;
+  flex-shrink:0;
+}
+.ndvi-header:active { cursor:grabbing; }
+.ndvi-title {
+  font-weight:600;font-size:13px;letter-spacing:.2px;
+  display:inline-flex;align-items:center;gap:6px;
+}
+.ndvi-title .ndvi-source {
+  font-weight:400;font-size:11px;color:var(--text-dim);
+  letter-spacing:0;
+  border-left:1px solid var(--panel-border);
+  padding-left:8px;margin-left:2px;
+  cursor:help;
+}
+.ndvi-header-controls { display:flex;gap:6px;align-items:center; }
+
+.ndvi-icon { display:inline-flex;align-items:center;justify-content:center;color:var(--accent); }
+.ndvi-icon svg { width:16px;height:16px;display:block; }
+.basemap-btn .ndvi-icon { margin-right:5px; }
+.basemap-btn.active .ndvi-icon { color:#fff; }
+
+.ndvi-year-select {
+  background:#11131b;border:1px solid var(--panel-border);
+  color:var(--text);font-family:'JetBrains Mono',monospace;
+  font-size:11px;padding:3px 6px;border-radius:4px;cursor:pointer;
+}
+.ndvi-year-select:focus { outline:none;border-color:var(--accent); }
+
+.ndvi-body {
+  padding:12px 14px;
+  display:flex;flex-direction:row;gap:0;
+  flex:1;min-height:0;overflow:hidden;
+}
+
+/* Left column: status + chart + Fetch button.
+   Fills the whole body when the guide is hidden. When the guide opens,
+   JS pins the left column to a fixed pixel flex-basis so the figure
+   doesn't resize or shift — only the panel's right edge moves. */
+.ndvi-left {
+  flex:1;
+  display:flex;flex-direction:column;gap:10px;
+  min-width:180px;min-height:0;
+  padding-right:0;
+  transition:none;
+}
+
+/* Vertical divider between chart and guide. Hidden by default; the
+   "Interpretation guide" button in the left column toggles it on. */
+.ndvi-split-handle {
+  flex:0 0 4px;
+  align-self:stretch;
+  cursor:col-resize;
+  background:var(--panel-border);
+  margin:0 2px;
+  border-radius:2px;
+  transition:background .15s;
+  display:none;
+}
+.ndvi-split-handle:hover,
+.ndvi-split-handle.active { background:var(--accent); }
+
+/* Right column: the class-reference guide. Hidden by default; the
+   "Interpretation guide" button in the left column toggles it on. */
+.ndvi-right {
+  flex:1;
+  min-width:220px;min-height:0;
+  overflow:auto;            /* horizontal scroll when cols sum > container */
+  padding-left:10px;
+  display:none;
+}
+
+/* When the guide is shown, the panel adds .guide-open to .ndvi-body. */
+.ndvi-body.guide-open .ndvi-split-handle,
+.ndvi-body.guide-open .ndvi-right { display:block; }
+.ndvi-body.guide-open { /* nothing to override — just a hook */ }
+
+/* Status line + triangle toggle on the same row. */
+.ndvi-status-row {
+  display:flex;align-items:center;gap:8px;flex-shrink:0;
+}
+.ndvi-status-row .ndvi-status { flex:1;min-width:0; }
+
+/* Hint label sitting just left of the triangle toggle. */
+.ndvi-guide-hint {
+  flex:0 0 auto;
+  font-size:11px;color:var(--text-dim);
+  white-space:nowrap;
+  margin-right:4px;
+}
+
+/* Triangle toggle that opens the interpretation guide column. */
+.ndvi-guide-toggle {
+  flex:0 0 auto;
+  width:22px;height:22px;
+  display:inline-flex;align-items:center;justify-content:center;
+  background:transparent;border:1px solid var(--panel-border);
+  border-radius:4px;color:var(--text-dim);
+  font-size:11px;line-height:1;cursor:pointer;padding:0;
+  transition:transform .15s, color .15s, border-color .15s, background .15s;
+}
+.ndvi-guide-toggle:hover {
+  color:var(--accent);border-color:var(--accent);
+}
+.ndvi-guide-toggle.active {
+  color:#fff;background:var(--accent);border-color:var(--accent);
+  transform:rotate(180deg);          /* ▶ flips to ◀ when open */
+}
+
+/* Plain (non-<details>) summary line at the top of the right column. */
+.ndvi-guide-summary {
+  font-size:12px;font-weight:600;color:var(--text);
+  padding:4px 0 6px;
+}
+
+.ndvi-status {
+  font-size:12px;color:var(--text-dim);line-height:1.45;
+  flex-shrink:0;
+}
+.ndvi-status.error { color:var(--danger); }
+.ndvi-status.warn  { color:var(--warning); }
+.ndvi-status.ok    { color:var(--success); }
+
+.ndvi-chart-wrap {
+  position:relative;
+  background:#11131b;
+  border:1px solid var(--panel-border);
+  border-radius:6px;
+  padding:6px;
+  flex:1;min-height:180px;
+}
+.ndvi-chart-wrap canvas { width:100% !important;height:100% !important; }
+.ndvi-chart-wrap.empty::after {
+  content:'No data — click Fetch NDVI';
+  position:absolute;inset:0;
+  display:flex;align-items:center;justify-content:center;
+  color:var(--text-dim);font-size:12px;pointer-events:none;
+}
+
+.ndvi-actions { display:flex;gap:8px;align-items:center;flex-shrink:0; }
+.ndvi-fetch-btn { flex:1;padding:8px 12px;font-size:12px; }
+.ndvi-fetch-btn[disabled] { opacity:.5;cursor:not-allowed; }
+
+.ndvi-guide { font-size:12px;flex-shrink:0; }
+.ndvi-guide summary {
+  cursor:pointer;color:var(--text-dim);
+  padding:4px 0;user-select:none;
+}
+.ndvi-guide summary:hover { color:var(--text); }
+.ndvi-guide-hint {
+  font-size:11px;color:var(--text-dim);
+  margin:4px 0 6px;line-height:1.4;
+}
+.ndvi-guide-table {
+  /* The total table width is the sum of the three <col> widths set from JS
+     (initColResize / hydrateColWidths). Letting the table size to its
+     content means the explicit per-column widths actually take effect; the
+     parent .ndvi-right scrolls horizontally if total > container. */
+  width:auto;min-width:100%;border-collapse:collapse;margin-top:4px;
+  font-family:'DM Sans',sans-serif;font-size:11px;
+  table-layout:fixed;
+}
+.ndvi-guide-table th,
+.ndvi-guide-table td {
+  padding:5px 6px;text-align:left;
+  border-bottom:1px solid var(--panel-border);
+  vertical-align:middle;
+}
+.ndvi-guide-table th {
+  color:var(--text-dim);font-weight:600;
+  position:relative;       /* anchor for the .ndvi-col-resize grip */
+}
+/* Column widths are set from JS (initColResize + hydrateColWidths) so users
+   can drag-resize them; defaults: class 110, range 130, pattern auto. */
+.ndvi-col-resize {
+  position:absolute;
+  top:0;bottom:0;right:-2px;
+  width:5px;cursor:col-resize;
+  z-index:1;
+  background:transparent;
+  transition:background .15s;
+}
+.ndvi-col-resize:hover,
+.ndvi-col-resize.active { background:var(--accent); }
+.ndvi-guide-table tr.current { background:rgba(59,130,246,.08); }
+.ndvi-guide-table tr.suggested input {
+  /* Suggested-from-preset values: italic + slightly dim until the user saves. */
+  font-style:italic;color:rgba(228,228,231,.75);
+}
+.ndvi-guide-table .class-dot {
+  display:inline-block;width:8px;height:8px;border-radius:50%;
+  margin-right:6px;vertical-align:1px;
+  border:1px solid rgba(255,255,255,.18);
+}
+.ndvi-guide-table input {
+  background:#11131b;border:1px solid var(--panel-border);
+  border-radius:3px;color:var(--text);
+  font-family:'JetBrains Mono',monospace;font-size:11px;
+  padding:3px 5px;
+}
+.ndvi-guide-table input:focus { outline:none;border-color:var(--accent); }
+.ndvi-guide-table .ndvi-range-cell { white-space:nowrap; }
+.ndvi-guide-table .ndvi-range-cell input {
+  width:58px;
+  text-align:center;
+}
+.ndvi-guide-table .ndvi-range-cell .sep { color:var(--text-dim);margin:0 4px; }
+.ndvi-guide-table .ndvi-pattern-cell input { width:100%;box-sizing:border-box; }
+
+.ndvi-guide-actions {
+  display:flex;align-items:center;gap:10px;
+  margin-top:8px;
+}
+.ndvi-guide-actions button { padding:5px 14px;font-size:11px; }
+.ndvi-guide-msg {
+  font-size:11px;color:var(--text-dim);
+}
+.ndvi-guide-msg.ok    { color:var(--success); }
+.ndvi-guide-msg.error { color:var(--danger); }
+
+.ndvi-resize-handle {
+  position:absolute;right:0;bottom:0;
+  width:16px;height:16px;
+  cursor:nwse-resize;
+  background:
+    linear-gradient(135deg, transparent 0 8px,
+                            rgba(255,255,255,.25) 8px 10px,
+                            transparent 10px 12px,
+                            rgba(255,255,255,.18) 12px 14px,
+                            transparent 14px 16px);
+  border-bottom-right-radius:10px;
+  z-index:3;
+}
+
+/* Eight-way resize: transparent edge strips and corner squares. The visible
+   bottom-right grip above sits on top with z-index:3 so the diagonal lines
+   still show. */
+.ndvi-edge   { position:absolute;background:transparent;z-index:2; }
+.ndvi-corner { position:absolute;width:12px;height:12px;background:transparent;z-index:2; }
+.ndvi-edge-n { top:0;     left:10px; right:10px; height:5px; cursor:ns-resize; }
+.ndvi-edge-s { bottom:0;  left:10px; right:10px; height:5px; cursor:ns-resize; }
+.ndvi-edge-w { left:0;    top:10px;  bottom:10px; width:5px; cursor:ew-resize; }
+.ndvi-edge-e { right:0;   top:10px;  bottom:10px; width:5px; cursor:ew-resize; }
+.ndvi-corner-nw { top:0;    left:0;     cursor:nwse-resize; }
+.ndvi-corner-ne { top:0;    right:0;    cursor:nesw-resize; }
+.ndvi-corner-sw { bottom:0; left:0;     cursor:nesw-resize; }
+/* corner-se is the visible grip above */
+

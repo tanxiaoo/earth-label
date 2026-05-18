@@ -54,9 +54,16 @@ function _format(env) {
     lines.push(`ESRI_API_KEY=${env.ESRI_API_KEY}`);
     lines.push('');
   }
-  // Preserve unknown keys
+  if (env.SENTINEL_HUB_CLIENT_ID || env.SENTINEL_HUB_CLIENT_SECRET) {
+    lines.push('# Sentinel Hub OAuth — https://www.sentinel-hub.com/');
+    if (env.SENTINEL_HUB_CLIENT_ID)     lines.push(`SENTINEL_HUB_CLIENT_ID=${env.SENTINEL_HUB_CLIENT_ID}`);
+    if (env.SENTINEL_HUB_CLIENT_SECRET) lines.push(`SENTINEL_HUB_CLIENT_SECRET=${env.SENTINEL_HUB_CLIENT_SECRET}`);
+    lines.push('');
+  }
+  const KNOWN = new Set(['PLANET_API_KEY', 'ESRI_API_KEY',
+                          'SENTINEL_HUB_CLIENT_ID', 'SENTINEL_HUB_CLIENT_SECRET']);
   for (const [k, v] of Object.entries(env)) {
-    if (k === 'PLANET_API_KEY' || k === 'ESRI_API_KEY') continue;
+    if (KNOWN.has(k)) continue;
     lines.push(`${k}=${v}`);
   }
   return lines.join('\n');

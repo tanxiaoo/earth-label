@@ -31,14 +31,15 @@ Plain comma-separated. The parser auto-detects column names case-insensitively.
 
 ### Optional columns
 
-| Field            | Accepted aliases |
-|------------------|------------------|
+| Field            | Accepted column names |
+|------------------|-----------------------|
 | Plot ID          | `PLOTID`, `ID`, `FID`, `NAME`, `Plot_ID` |
-| Reference code   | `molca_class`, `ref_code`, `class_code`, `CLASS_CODE`, `ref_class`, `refcode`, `refCode` |
-| Reference label  | `molca_label`, `ref_label`, `class_label`, `CLASS_LABEL`, `label`, `refLabel`, `reflabel` |
+| Reference code   | `ref_code` |
+| Reference label  | `ref_label` |
 
-If `Plot ID` is absent, the row index is used.
-All other columns become `meta` and are preserved in the GeoJSON export.
+Header matching is **exact and case-insensitive** — `ref_code` and `REF_CODE` are both recognized, but other variants are not. If `Plot ID` is absent, the row index is used. All other columns become `meta` and are preserved in both CSV and GeoJSON exports.
+
+> **USDA CDL sample files** — The Cochran sample generator (`cochran_sample_test_set.py`) outputs `cdl_label_code` and `cdl_label_name` columns. These are not recognised as reference columns by the parser (they land in `meta`), but EarthLabel's display code falls back to `meta.cdl_label_code` / `meta.cdl_label_name` when `refCode` / `refLabel` are empty, so the Reference badge in the UI still shows correctly. To avoid the fallback and have them treated as canonical reference columns, rename them to `ref_code` / `ref_label` in the CSV before upload.
 
 ### Example
 
@@ -196,12 +197,13 @@ If your file has an unusual extension, rename it before upload.
 ### CSV (`↓ CSV` button)
 
 ```csv
-PLOTID,LAT,LON,ref_code,ref_label,class_code,class_label,confidence,notes
-1,0.5856,27.7400,20,Forest,20,Forest,High,
-2,7.5617,13.7757,5,Shrubland,8,Cropland,Medium,"misclassified in 2019"
+PLOTID,LAT,LON,ref_code,ref_label,class_code,class_label,confidence,notes,Tile_ID,source
+1,0.5856,27.7400,20,Forest,20,Forest,High,,35PRQ,reused_2019
+2,7.5617,13.7757,5,Shrubland,8,Cropland,Medium,"misclassified in 2019",36QXT,fresh_2024
 ```
 
 - Identity columns are uppercase (`PLOTID`, `LAT`, `LON`); result columns are snake-case.
+- Any unknown columns from the input (e.g. `Tile_ID`, `source` above) are appended after `notes` in their original order, so the export is a strict superset of the input.
 - Project name and timestamps are intentionally omitted from the CSV — the project name lives in the filename, and per-row timestamps clutter analytical exports. Use the GeoJSON export or the project `.json` if you need them.
 - A UTF-8 BOM is prepended so Excel renders non-ASCII project / class names correctly.
 - Flat, suitable for analysis in Pandas / Excel / R.

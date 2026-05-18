@@ -24,10 +24,11 @@ export const listProjects  = ()       => fetch('/api/projects').then(_json);
 export const loadProject   = (id)     => fetch(`/api/projects/${id}`).then(_json);
 export const deleteProject = (id)     => fetch(`/api/projects/${id}`, { method:'DELETE' }).then(_json);
 
-export async function createProject(name, classSchema, file) {
+export async function createProject(name, classSchema, file, uaSettings) {
   const form = new FormData();
   form.append('name', name);
   form.append('classSchema', JSON.stringify(classSchema));
+  form.append('uaSettings', JSON.stringify(uaSettings || {}));
   if (file) form.append('file', file);
   return fetch('/api/projects', { method:'POST', body:form }).then(_json);
 }
@@ -40,6 +41,10 @@ export const saveResult = (projectId, plotId, result) =>
 
 export const saveClassSchema = (projectId, classSchema) =>
   updateProject(projectId, { classSchema, lastUsed: new Date().toISOString() });
+
+// Save UA / assessment settings for an existing project
+export const saveProjectSettings = (projectId, uaSettings) =>
+  updateProject(projectId, { uaSettings, lastUsed: new Date().toISOString() });
 
 export async function parseFile(file) {
   const form = new FormData();
@@ -55,11 +60,23 @@ export async function importProject(file) {
 
 export const exportProjectUrl = (id) => `/api/projects/${id}/export`;
 
-// KML update (Google Earth Pro). `range` is meters from camera to point.
-export const updateKML = (lat, lon, id, label, range) =>
+// KML update (Google Earth Pro). `pixelMode` is null in point mode, or
+// { plotSizeM, subPointGrid, subPointResults[], selectedIdx } in pixel mode.
+export const updateKML = (lat, lon, id, label, range, pixelMode = null) =>
   fetch('/kml/update', { method:'POST', headers:{'Content-Type':'application/json'},
-                          body: JSON.stringify({ lat, lon, id, label, range }) }).catch(() => {});
+                          body: JSON.stringify({ lat, lon, id, label, range, pixelMode }) }).catch(() => {});
 
 export const updateKMLRange = (range) =>
   fetch('/kml/update', { method:'POST', headers:{'Content-Type':'application/json'},
                           body: JSON.stringify({ range }) }).catch(() => {});
+
+// NDVI — Sentinel Hub monthly time series for a point
+export const getNdviMonthly = (lat, lon, year = 2025) =>
+  fetch('/api/ndvi/monthly', { method:'POST', headers:{'Content-Type':'application/json'},
+                                body: JSON.stringify({ lat, lon, year }) }).then(_json);
+
+export const saveNdviCache = (projectId, plotId, year, months) =>
+  updateProject(projectId, {
+    ndviCacheUpdate: { plotId, year, months },
+    lastUsed: new Date().toISOString(),
+  });

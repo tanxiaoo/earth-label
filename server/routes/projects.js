@@ -30,6 +30,35 @@ function ensureDir() { if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { re
 function readProj(id) { return JSON.parse(fs.readFileSync(projPath(id), 'utf8')); }
 function writeProj(proj) { fs.writeFileSync(projPath(proj.id), JSON.stringify(proj, null, 2)); }
 
+// Reserved column names that an annotation-field key must not collide with —
+// these are the fixed columns the CSV/GeoJSON exporters always emit.
+const RESERVED_ANNO_KEYS = new Set([
+  'plotid','lat','lon','ref_code','ref_label',
+  'class_code','class_label','confidence',
+]);
+const ANNO_KEY_RE = /^[a-z][a-z0-9_]{0,30}$/;
+const ANNO_TYPES = new Set(['text','binary']);
+const DEFAULT_ANNOTATION_FIELDS = [{ key: 'notes', label: 'Notes', type: 'text' }];
+
+// Validate annotationFields. Returns the cleaned array on success, throws on failure.
+function validateAnnotationFields(fields) {
+  if (!Array.isArray(fields)) throw new Error('annotationFields must be an array');
+  const seen = new Set();
+  return fields.map((f, i) => {
+    if (!f || typeof f !== 'object') throw new Error(`annotationFields[${i}] must be an object`);
+    const key = String(f.key || '').trim();
+    const label = String(f.label || '').trim();
+    const type = String(f.type || '').trim();
+    if (!ANNO_KEY_RE.test(key)) throw new Error(`annotationFields[${i}].key invalid: "${key}" (must match ${ANNO_KEY_RE})`);
+    if (RESERVED_ANNO_KEYS.has(key)) throw new Error(`annotationFields[${i}].key "${key}" conflicts with a built-in column`);
+    if (seen.has(key)) throw new Error(`annotationFields[${i}].key "${key}" is duplicated`);
+    if (!label) throw new Error(`annotationFields[${i}].label is required`);
+    if (!ANNO_TYPES.has(type)) throw new Error(`annotationFields[${i}].type must be one of: ${[...ANNO_TYPES].join(', ')}`);
+    seen.add(key);
+    return { key, label, type };
+  });
+}
+
 // GET /api/projects — project list (summaries)
 router.get('/', (req, res) => {
   ensureDir();
@@ -59,16 +88,29 @@ router.get('/:id', (req, res) => {
 // POST /api/projects/json — create from raw JSON body (no file; used for demo/programmatic creation)
 router.post('/json', (req, res) => {
   ensureDir();
-  const { name, classSchema, plots } = req.body;
+  const { name, classSchema, plots, annotationFields, uaSettings } = req.body;
   if (!name) return res.status(400).json({ error: 'Project name required' });
+  let annoFields;
+  try {
+    annoFields = annotationFields ? validateAnnotationFields(annotationFields) : DEFAULT_ANNOTATION_FIELDS;
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
+  }
+  const ua = uaSettings || {};
   const id = `proj_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
   const proj = {
     id, name,
     created: new Date().toISOString(),
     lastUsed: new Date().toISOString(),
     classSchema: classSchema || [],
+    annotationFields: annoFields,
     plots: (plots || []).map(p => ({ ...p, geometry: p.geometry ?? null, meta: p.meta ?? {} })),
     results: {},
+    assessmentMode:       ua.assessmentMode       || 'point',
+    plotSizeM:            ua.plotSizeM            || 30,
+    subPointGrid:         ua.subPointGrid         || '5x5',
+    aggregationRule:      ua.aggregationRule      || 'majority',
+    aggregationThreshold: ua.aggregationThreshold || 0.5,
   };
   writeProj(proj);
   res.json({ id });
@@ -98,6 +140,15 @@ router.post('/', upload.single('file'), async (req, res) => {
     return res.status(400).json({ error: 'Invalid classSchema JSON' });
   }
 
+  let annotationFields = DEFAULT_ANNOTATION_FIELDS;
+  if (req.body.annotationFields) {
+    let parsed;
+    try { parsed = JSON.parse(req.body.annotationFields); }
+    catch { return res.status(400).json({ error: 'Invalid annotationFields JSON' }); }
+    try { annotationFields = validateAnnotationFields(parsed); }
+    catch (err) { return res.status(400).json({ error: err.message }); }
+  }
+
   let plots = [];
   if (req.file) {
     try {
@@ -107,31 +158,60 @@ router.post('/', upload.single('file'), async (req, res) => {
     }
   }
 
+  let uaSettings = {};
+  try { uaSettings = JSON.parse(req.body.uaSettings || '{}'); } catch { uaSettings = {}; }
+
   const id = `proj_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
   const proj = {
     id, name,
     created: new Date().toISOString(),
     lastUsed: new Date().toISOString(),
     classSchema,
+    annotationFields,
     plots,
     results: {},
+    // UA / Assessment settings
+    assessmentMode:       uaSettings.assessmentMode       || 'point',
+    plotSizeM:            uaSettings.plotSizeM            || 30,
+    subPointGrid:         uaSettings.subPointGrid         || '5x5',
+    aggregationRule:      uaSettings.aggregationRule      || 'majority',
+    aggregationThreshold: uaSettings.aggregationThreshold || 0.5,
   };
   writeProj(proj);
   res.json({ id });
 });
 
-// PATCH /api/projects/:id — incremental update (result, classSchema, name, lastUsed)
+// PATCH /api/projects/:id — incremental update (result, classSchema, annotationFields, ndviCacheUpdate, name, lastUsed)
 router.patch('/:id', (req, res) => {
   if (!fs.existsSync(projPath(req.params.id))) return res.status(404).json({ error: 'Not found' });
   const proj = readProj(req.params.id);
-  const { plotId, result, classSchema, name, lastUsed } = req.body;
+  const { plotId, result, classSchema, annotationFields, ndviCacheUpdate, name, lastUsed, uaSettings } = req.body;
 
   if (plotId && result) {
     proj.results = proj.results || {};
     proj.results[plotId] = { ...result, savedAt: new Date().toISOString() };
   }
   if (classSchema) proj.classSchema = classSchema;
+  if (annotationFields !== undefined) {
+    try { proj.annotationFields = validateAnnotationFields(annotationFields); }
+    catch (err) { return res.status(400).json({ error: err.message }); }
+  }
+  if (ndviCacheUpdate && ndviCacheUpdate.plotId != null && Array.isArray(ndviCacheUpdate.months)) {
+    proj.ndviCache = proj.ndviCache || {};
+    proj.ndviCache[ndviCacheUpdate.plotId] = {
+      year: ndviCacheUpdate.year ?? 2025,
+      months: ndviCacheUpdate.months,
+      fetchedAt: new Date().toISOString(),
+    };
+  }
   if (name)        proj.name = name;
+  if (uaSettings) {
+    if (uaSettings.assessmentMode       != null) proj.assessmentMode       = uaSettings.assessmentMode;
+    if (uaSettings.plotSizeM            != null) proj.plotSizeM            = uaSettings.plotSizeM;
+    if (uaSettings.subPointGrid         != null) proj.subPointGrid         = uaSettings.subPointGrid;
+    if (uaSettings.aggregationRule      != null) proj.aggregationRule      = uaSettings.aggregationRule;
+    if (uaSettings.aggregationThreshold != null) proj.aggregationThreshold = uaSettings.aggregationThreshold;
+  }
   proj.lastUsed = lastUsed || new Date().toISOString();
 
   writeProj(proj);

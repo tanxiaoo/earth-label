@@ -28,11 +28,11 @@
 
 <!-- CREATE PROJECT -->
 <div id="createProjectModal" class="modal-overlay hidden">
-  <div class="modal-content" style="max-width:460px;width:90vw;">
+  <div class="modal-content" style="max-width:480px;width:90vw;">
     <h3>Create Project</h3>
 
     <label class="field-label">Project Name</label>
-    <input type="text" id="newProjectName" placeholder="e.g. Nairobi 2024" class="field-input">
+    <input type="text" id="newProjectName" placeholder="e.g. Maine CDL 2023" class="field-input">
 
     <label class="field-label" style="margin-top:12px;">Plot File
       <span class="hint">CSV · GeoJSON · KML · KMZ · Shapefile (.zip)</span>
@@ -48,6 +48,73 @@
     </select>
     <div id="schemaPreview" class="schema-preview"></div>
 
+    <!-- ── Assessment Mode ── -->
+    <div style="margin-top:16px;padding:12px;background:#0f1117;border-radius:8px;border:1px solid var(--panel-border);">
+      <label class="field-label" style="margin-bottom:8px;">Assessment Mode</label>
+      <div style="display:flex;gap:8px;margin-bottom:10px;">
+        <label style="flex:1;cursor:pointer;">
+          <input type="radio" name="createAssessMode" id="createAssessModePoint" value="point"
+                 onchange="app.onCreateAssessModeChange()" checked style="margin-right:5px;">
+          <span style="font-size:13px;font-weight:600;">Point</span>
+          <div style="font-size:11px;color:var(--text-dim);margin-top:2px;margin-left:18px;">
+            Classify each sample point directly. No area boundary shown.
+          </div>
+        </label>
+        <label style="flex:1;cursor:pointer;">
+          <input type="radio" name="createAssessMode" id="createAssessModePixel" value="pixel"
+                 onchange="app.onCreateAssessModeChange()" style="margin-right:5px;">
+          <span style="font-size:13px;font-weight:600;">Pixel / Plot (CEO)</span>
+          <div style="font-size:11px;color:var(--text-dim);margin-top:2px;margin-left:18px;">
+            Each entry is a pixel center. Classify a sub-point grid inside the UA square.
+          </div>
+        </label>
+      </div>
+
+      <!-- UA fields (pixel mode only) -->
+      <div id="createUAFields" style="display:none;padding-top:10px;border-top:1px solid var(--panel-border);">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;">
+          <div>
+            <label class="field-label">UA Size (meters)</label>
+            <div style="display:flex;gap:4px;margin-bottom:6px;flex-wrap:wrap;">
+              <button class="basemap-btn" style="font-size:11px;padding:3px 8px;" onclick="document.getElementById('createPlotSizeM').value=10">10 m</button>
+              <button class="basemap-btn" style="font-size:11px;padding:3px 8px;" onclick="document.getElementById('createPlotSizeM').value=20">20 m</button>
+              <button class="basemap-btn" style="font-size:11px;padding:3px 8px;" onclick="document.getElementById('createPlotSizeM').value=30">30 m</button>
+              <button class="basemap-btn" style="font-size:11px;padding:3px 8px;" onclick="document.getElementById('createPlotSizeM').value=50">50 m</button>
+            </div>
+            <input type="number" id="createPlotSizeM" value="30" min="1" max="500" class="field-input" placeholder="e.g. 30">
+          </div>
+          <div>
+            <label class="field-label">Sub-point Grid</label>
+            <select id="createSubGrid" class="field-input">
+              <option value="3x3">3×3 (9 points)</option>
+              <option value="5x5" selected>5×5 (25 points)</option>
+            </select>
+            <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">Points placed inside UA square</div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;">
+          <div>
+            <label class="field-label">Aggregation Rule</label>
+            <select id="createAggRule" class="field-input">
+              <option value="majority" selected>Majority class wins</option>
+              <option value="threshold">Threshold (%) must be met</option>
+            </select>
+          </div>
+          <div>
+            <label class="field-label">Threshold %</label>
+            <input type="number" id="createAggThreshold" value="50" min="1" max="100" class="field-input" placeholder="50">
+            <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">Used only with threshold rule</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- hidden select used by onCreateAssessModeChange() -->
+    <select id="createAssessMode" style="display:none">
+      <option value="point">point</option>
+      <option value="pixel">pixel</option>
+    </select>
+
     <div id="createError" class="error-msg hidden"></div>
 
     <div class="modal-actions" style="margin-top:16px;">
@@ -57,7 +124,7 @@
   </div>
 </div>
 
-<!-- SETTINGS -->
+<!-- SETTINGS (API keys) -->
 <div id="settingsModal" class="modal-overlay hidden">
   <div class="modal-content" style="max-width:400px;">
     <h3>Settings</h3>
@@ -77,11 +144,89 @@
       Esri / ArcGIS Wayback and World Imagery are public layers — no API key required.
     </p>
 
+    <label class="field-label" style="margin-top:14px;">Sentinel Hub Client ID
+      <span id="shIdStatus" class="key-status"></span>
+    </label>
+    <div style="display:flex;gap:8px;">
+      <input type="password" id="shClientId" placeholder="Enter Client ID…" class="field-input" style="flex:1;">
+      <button class="basemap-btn" onclick="app.clearKey('sentinel_hub_id')" title="Clear Client ID">✕</button>
+    </div>
+
+    <label class="field-label" style="margin-top:10px;">Sentinel Hub Client Secret
+      <span id="shSecretStatus" class="key-status"></span>
+    </label>
+    <div style="display:flex;gap:8px;">
+      <input type="password" id="shClientSecret" placeholder="Enter Client Secret…" class="field-input" style="flex:1;">
+      <button class="basemap-btn" onclick="app.clearKey('sentinel_hub_secret')" title="Clear Client Secret">✕</button>
+    </div>
+    <p style="font-size:11px;color:var(--text-dim);margin-top:8px;line-height:1.5;">
+      Required only for the NDVI panel. Create an OAuth client at the Sentinel Hub dashboard.
+    </p>
+
     <div id="settingsMsg" class="error-msg hidden" style="margin-top:10px;"></div>
 
     <div class="modal-actions" style="margin-top:16px;">
       <button class="basemap-btn" onclick="app.closeSettings()">Cancel</button>
       <button class="submit-btn" style="padding:8px 20px;width:auto;" onclick="app.saveSettings()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- PROJECT SETTINGS (Assessment Mode / UA) -->
+<div id="projectSettingsModal" class="modal-overlay hidden">
+  <div class="modal-content" style="max-width:480px;width:90vw;">
+    <h3>Project Settings — Assessment / UA</h3>
+    <p style="font-size:12px;color:var(--text-dim);margin-bottom:14px;">
+      Changes apply immediately to all new navigations in this project.
+      Existing results are preserved; re-classifying a plot will overwrite its result.
+    </p>
+
+    <label class="field-label">Assessment Mode</label>
+    <select id="settingsAssessMode" class="field-input" onchange="app.onSettingsAssessModeChange()">
+      <option value="point">Point — classify each sample point directly</option>
+      <option value="pixel">Pixel / Plot (CEO) — sub-point grid inside UA square</option>
+    </select>
+
+    <div id="settingsUAFields" style="display:none;margin-top:14px;padding:12px;background:#0f1117;border-radius:8px;border:1px solid var(--panel-border);">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div>
+          <label class="field-label">UA Size (meters)</label>
+          <div style="display:flex;gap:4px;margin-bottom:6px;flex-wrap:wrap;">
+            <button class="basemap-btn" style="font-size:11px;padding:3px 8px;" onclick="document.getElementById('settingsPlotSizeM').value=10">10 m</button>
+            <button class="basemap-btn" style="font-size:11px;padding:3px 8px;" onclick="document.getElementById('settingsPlotSizeM').value=20">20 m</button>
+            <button class="basemap-btn" style="font-size:11px;padding:3px 8px;" onclick="document.getElementById('settingsPlotSizeM').value=30">30 m</button>
+            <button class="basemap-btn" style="font-size:11px;padding:3px 8px;" onclick="document.getElementById('settingsPlotSizeM').value=50">50 m</button>
+          </div>
+          <input type="number" id="settingsPlotSizeM" value="30" min="1" max="500" class="field-input">
+        </div>
+        <div>
+          <label class="field-label">Sub-point Grid</label>
+          <select id="settingsSubGrid" class="field-input">
+            <option value="3x3">3×3 (9 points)</option>
+            <option value="5x5" selected>5×5 (25 points)</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;">
+        <div>
+          <label class="field-label">Aggregation Rule</label>
+          <select id="settingsAggRule" class="field-input">
+            <option value="majority">Majority class wins</option>
+            <option value="threshold">Threshold (%) must be met</option>
+          </select>
+        </div>
+        <div>
+          <label class="field-label">Threshold %</label>
+          <input type="number" id="settingsAggThreshold" value="50" min="1" max="100" class="field-input">
+        </div>
+      </div>
+    </div>
+
+    <div id="projectSettingsMsg" class="error-msg hidden" style="margin-top:10px;"></div>
+
+    <div class="modal-actions" style="margin-top:16px;">
+      <button class="basemap-btn" onclick="app.closeProjectSettings()">Cancel</button>
+      <button class="submit-btn" style="padding:8px 20px;width:auto;" onclick="app.saveProjectSettings()">Save Settings</button>
     </div>
   </div>
 </div>
@@ -117,6 +262,29 @@
   </div>
 </div>
 
+<!-- ANNOTATION FIELDS EDITOR -->
+<div id="annotationFieldsEditorModal" class="modal-overlay hidden">
+  <div class="modal-content" style="max-width:560px;width:90vw;max-height:90vh;display:flex;flex-direction:column;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <h3 style="margin:0;">Edit Annotation Fields</h3>
+    </div>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:10px;line-height:1.5;">
+      Each field becomes one column in the CSV/GeoJSON export. Keys must be lowercase snake_case (a–z, 0–9, _) and unique. Renaming or deleting a field with existing data does not migrate or restore values.
+    </div>
+
+    <div id="annotationFieldsEditorList" style="flex:1;overflow-y:auto;margin-bottom:12px;"></div>
+
+    <button class="basemap-btn" style="width:100%;padding:10px;border-style:dashed;" onclick="app.addAnnotationField()">+ Add Field</button>
+
+    <div id="annotationFieldsEditorError" class="hidden" style="color:#ef4444;font-size:12px;margin-top:8px;"></div>
+
+    <div class="modal-actions" style="margin-top:12px;">
+      <button class="basemap-btn" onclick="app.closeAnnotationFieldsEditor()">Cancel</button>
+      <button class="submit-btn" style="padding:8px 20px;width:auto;" onclick="app.saveAnnotationFields()">Save Fields</button>
+    </div>
+  </div>
+</div>
+
 <!-- ════════════════════════════════════════════════════ LEFT SIDEBAR ══════ -->
 <div class="sidebar">
   <div class="sidebar-header">
@@ -147,13 +315,17 @@
     <div class="sidebar-toolbar" style="justify-content:space-between;">
       <button class="basemap-btn" style="border:none;padding:0;display:flex;align-items:center;gap:4px;font-size:12px;" onclick="app.showProjectListView()">← Projects</button>
       <div style="display:flex;gap:6px;">
+        <button class="basemap-btn" style="padding:4px 10px;font-size:11px;" onclick="app.openProjectSettings()" title="Assessment / UA settings">⚙ UA</button>
         <button class="basemap-btn" style="padding:4px 10px;font-size:11px;" onclick="app.exportProjectFile()" title="Export project JSON">↓</button>
         <button class="basemap-btn" style="padding:4px 10px;font-size:11px;color:var(--danger);border-color:var(--danger);" onclick="app.deleteCurrentProject()">🗑</button>
       </div>
     </div>
 
-    <div style="padding:12px 20px;border-bottom:1px solid var(--panel-border);">
+    <div style="padding:10px 20px 8px;border-bottom:1px solid var(--panel-border);">
       <h2 id="activeProjectName" style="font-size:15px;font-weight:700;">—</h2>
+      <div style="margin-top:4px;">
+        <span id="uaModeBadge" class="ua-mode-badge" style="display:none;"></span>
+      </div>
     </div>
 
     <div class="progress-bar">
@@ -213,10 +385,17 @@
       </select>
       <div class="toolbar-separator"></div>
     </div>
+    <button class="basemap-btn" id="btn-ndvi" onclick="app.toggleNdviPanel()" title="Toggle the floating NDVI time-series panel" aria-label="Toggle NDVI panel"><span class="ndvi-icon" aria-hidden="true"></span>NDVI</button>
+    <div class="toolbar-separator"></div>
     <button class="nav-btn prev" onclick="app.prevPlot()">← Prev</button>
     <button class="nav-btn next" onclick="app.nextPlot()">Next →</button>
     <button class="nav-btn" id="btn-ge" onclick="app.openGoogleEarth()" disabled title="Open this plot in Google Earth Web (new tab)" style="background:#2a2d3a;color:var(--text);">🌍 Google Earth</button>
-    <div class="ge-range" title="Camera distance (meters) for Google Earth Pro live sync and the Google Earth Web button. Drag to adjust.">
+    <button class="nav-btn" id="btn-gep" onclick="app.toggleGepMode()" title="Toggle: I am using Google Earth Pro as my reference for this classification" style="background:#2a2d3a;color:var(--text);">📡 GEP</button>
+    <input type="number" id="gepYearInput" min="2000" max="2030" placeholder="GEP year"
+           oninput="app.onGepYearInput(this.value)"
+           title="Year you are viewing in Google Earth Pro's time slider"
+           style="display:none;width:76px;padding:3px 5px;background:#1e2030;color:var(--text);border:1px solid #3a3f55;border-radius:4px;font-size:12px;">
+    <div class="ge-range" title="Camera distance (meters) for Google Earth Pro live sync and Google Earth Web.">
       <input type="range" id="geRangeSlider" min="50" max="5000" step="50" value="1000"
              oninput="app.onGeRangeInput(this.value)">
       <span id="geRangeLabel" class="ge-range-label">1000 m</span>
@@ -303,10 +482,15 @@
 <div class="classify-panel">
   <div class="classify-header">
     <div style="display:flex;justify-content:space-between;align-items:center;">
-      <h2>Classify This Plot</h2>
+      <h2 id="classifyHeader">Classify This Plot</h2>
       <button class="icon-btn" onclick="app.openClassEditor()" title="Edit class schema">✏</button>
     </div>
     <div class="ref-badge" id="molcaRef">Reference: <span>–</span></div>
+    <!-- Sub-point progress (pixel mode only) -->
+    <div id="subPointInfo" style="display:none;margin-top:8px;">
+      <div class="sp-progress-label"></div>
+      <div class="sp-dots"></div>
+    </div>
   </div>
 
   <div class="class-list" id="classList"></div>
@@ -321,11 +505,22 @@
   </div>
 
   <div class="notes-section">
-    <label style="font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:6px;">Notes</label>
-    <textarea id="notesInput" placeholder="Optional notes…"></textarea>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+      <label style="font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px;">Annotations</label>
+      <button class="icon-btn" onclick="app.openAnnotationFieldsEditor()" title="Edit annotation fields">✏</button>
+    </div>
+    <div id="annotationsContainer"></div>
   </div>
 
   <div class="submit-section">
+    <small id="imageSrcIndicator" style="display:block;text-align:center;color:var(--text-dim);font-size:11px;margin-bottom:6px;letter-spacing:.01em;"></small>
+    <div style="display:flex;align-items:center;justify-content:space-between;background:#1a1d2e;border-radius:6px;padding:5px 10px;margin-bottom:6px;position:relative;">
+      <span style="font-size:11px;color:var(--text-dim);">⏱ Time</span>
+      <span id="timerDisplay" style="font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--text);">0:00</span>
+      <span id="timerResumedNotif" style="position:absolute;left:50%;transform:translateX(-50%);bottom:calc(100% + 4px);background:#22c55e;color:#fff;font-size:10px;padding:2px 7px;border-radius:4px;pointer-events:none;opacity:0;transition:opacity .3s;">▶ resumed</span>
+      <button id="timerPauseBtn" onclick="app.toggleTimerPause()" title="Pause / Resume timer"
+              style="background:transparent;border:1px solid #3a3f55;border-radius:4px;color:var(--text-dim);cursor:pointer;font-size:13px;padding:1px 7px;line-height:1.4;">⏸</button>
+    </div>
     <button class="submit-btn" id="submitBtn" onclick="app.submitClassification()" disabled>Submit &amp; Next →</button>
     <div style="display:flex;gap:6px;margin-top:8px;">
       <button class="export-btn" onclick="app.exportCSV()" style="flex:1;">↓ CSV</button>
@@ -337,6 +532,73 @@
 <!-- hidden file inputs for project import -->
 <input type="file" id="importProjectInput" accept=".json" style="display:none" onchange="app.onImportProjectFile(event)">
 
+<!-- ═══════════════════════════════════════════════ FLOATING NDVI PANEL ════ -->
+<div id="ndviPanel" class="ndvi-panel hidden" role="dialog" aria-label="NDVI time series">
+  <div class="ndvi-header" id="ndviHeader">
+    <span class="ndvi-title"><span class="ndvi-icon" aria-hidden="true"></span>NDVI<span class="ndvi-source" title="Monthly mean NDVI from Sentinel-2 L2A (10 m), queried via the Sentinel Hub Statistical API. Cloud-masked; missing months indicate no valid observations.">Sentinel-2 · monthly mean</span></span>
+    <div class="ndvi-header-controls">
+      <select id="ndviYear" class="ndvi-year-select" title="Year" onchange="app.onNdviYearChange()"></select>
+      <button id="ndviSeasonBtn" onclick="app.toggleSeasonBand()" title="Show / hide growing season band (Apr – Sep)">Season</button>
+      <button class="icon-btn" id="ndviRefreshBtn" onclick="app.refreshNdvi()" title="Re-fetch (overwrites cache)">↻</button>
+      <button class="icon-btn" onclick="app.closeNdviPanel()" title="Close">✕</button>
+    </div>
+  </div>
+  <div class="ndvi-body">
+    <div class="ndvi-left">
+      <div class="ndvi-status-row">
+        <div id="ndviStatus" class="ndvi-status">Open a plot to begin.</div>
+        <span class="ndvi-guide-hint">Interpretation guide</span>
+        <button class="ndvi-guide-toggle" id="ndviGuideToggleBtn" onclick="app.toggleNdviGuide()" title="Show / hide the class reference guide" aria-label="Toggle interpretation guide">▶</button>
+      </div>
+      <div class="ndvi-chart-wrap">
+        <canvas id="ndviChart"></canvas>
+      </div>
+      <div class="ndvi-actions">
+        <button class="submit-btn ndvi-fetch-btn" id="ndviFetchBtn" onclick="app.fetchNdvi()">Fetch NDVI</button>
+      </div>
+    </div>
+    <div class="ndvi-split-handle" id="ndviSplitHandle" title="Drag to resize"></div>
+    <div class="ndvi-right">
+      <div class="ndvi-guide" id="ndviGuide">
+        <div class="ndvi-guide-summary">Interpretation guide — class reference</div>
+        <div class="ndvi-guide-hint">Edit NDVI range and curve shape per class. Saved with this project.</div>
+        <table id="ndviGuideTable" class="ndvi-guide-table">
+          <colgroup>
+            <col class="ndvi-col-class">
+            <col class="ndvi-col-range">
+            <col class="ndvi-col-pattern">
+          </colgroup>
+          <thead>
+            <tr>
+              <th>Class<span class="ndvi-col-resize" data-col="class"></span></th>
+              <th>NDVI range<span class="ndvi-col-resize" data-col="range"></span></th>
+              <th>Curve shape</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+        <div class="ndvi-guide-actions">
+          <button class="basemap-btn" id="ndviGuideSaveBtn" onclick="app.saveNdviGuide()">Save guide</button>
+          <button class="basemap-btn" id="ndviGuideResetAllBtn" onclick="app.resetNdviGuide()" title="Reset every row to the scheme's default NDVI range and curve shape">Reset all to defaults</button>
+          <span id="ndviGuideMsg" class="ndvi-guide-msg"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- Eight resize zones (4 edges + 4 corners). Transparent overlays driven by
+       initResize() in ndvi-panel.js; the visible diagonal grip below is also
+       wired to the same driver with direction="se". -->
+  <div class="ndvi-edge ndvi-edge-n" data-resize="n"></div>
+  <div class="ndvi-edge ndvi-edge-s" data-resize="s"></div>
+  <div class="ndvi-edge ndvi-edge-e" data-resize="e"></div>
+  <div class="ndvi-edge ndvi-edge-w" data-resize="w"></div>
+  <div class="ndvi-corner ndvi-corner-ne" data-resize="ne"></div>
+  <div class="ndvi-corner ndvi-corner-nw" data-resize="nw"></div>
+  <div class="ndvi-corner ndvi-corner-sw" data-resize="sw"></div>
+  <div class="ndvi-resize-handle ndvi-corner-se" id="ndviResizeHandle" data-resize="se" title="Drag to resize"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script type="module" src="/js/app.js"></script>
 </body>
 </html>
