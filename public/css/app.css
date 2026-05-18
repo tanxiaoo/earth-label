@@ -682,23 +682,31 @@ body.split-mode .global-basemaps { display:none !important; }
   inset: 0;
   z-index: 9990;
   pointer-events: none;
+  background: transparent;
 }
-#tourOverlay:not(.hidden) { pointer-events: all; }
+#tourOverlay:not(.hidden) {
+  pointer-events: all;
+  background: rgba(0,0,0,0.62);  /* darkens page for centered steps (no cutout) */
+}
 
-/* The transparent cutout — its giant box-shadow darkens everything else */
+/* The transparent cutout — its giant box-shadow adds extra darkening
+   around the spotlight; the cutout itself is transparent to show through */
 #tourCutout {
   position: fixed;
   border-radius: 6px;
-  box-shadow: 0 0 0 9999px rgba(0,0,0,0.68);
+  box-shadow: 0 0 0 9999px rgba(0,0,0,0.45);
   z-index: 9991;
   pointer-events: none;
   display: none;
   transition: left .25s, top .25s, width .25s, height .25s;
 }
 
-/* The floating instruction card */
+/* The floating instruction card — centered by default; JS overrides per step */
 .tour-card {
   position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
   width: 310px;
   background: #1e2130;
   border: 1px solid #3a3f55;
@@ -706,7 +714,7 @@ body.split-mode .global-basemaps { display:none !important; }
   padding: 18px 20px 14px;
   z-index: 9992;
   pointer-events: all;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.55);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.6);
   transition: left .25s, top .25s, transform .25s;
 }
 .tour-card-header {
@@ -717,28 +725,28 @@ body.split-mode .global-basemaps { display:none !important; }
 }
 .tour-progress {
   font-size: 11px;
-  color: var(--text-dim);
+  color: #8b8d97;
   font-family: 'JetBrains Mono', monospace;
 }
 .tour-skip {
   background: transparent;
   border: none;
-  color: var(--text-dim);
+  color: #8b8d97;
   font-size: 11px;
   cursor: pointer;
   padding: 0;
 }
-.tour-skip:hover { color: var(--text); }
+.tour-skip:hover { color: #e4e4e7; }
 .tour-title {
   font-size: 14px;
   font-weight: 700;
   margin: 0 0 8px;
-  color: var(--text);
+  color: #e4e4e7;
 }
 .tour-body {
   font-size: 12px;
   line-height: 1.6;
-  color: var(--text-dim);
+  color: #8b8d97;
   margin: 0 0 14px;
 }
 .tour-dots {
@@ -765,13 +773,13 @@ body.split-mode .global-basemaps { display:none !important; }
   border-radius: 6px;
   border: 1px solid #3a3f55;
   background: transparent;
-  color: var(--text-dim);
+  color: #8b8d97;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   transition: all .15s;
 }
-.tour-btn:hover { background: rgba(255,255,255,.06); color: var(--text); }
+.tour-btn:hover { background: rgba(255,255,255,.06); color: #e4e4e7; }
 .tour-btn:disabled { opacity: .35; cursor: default; }
 .tour-btn-primary {
   background: var(--accent);
