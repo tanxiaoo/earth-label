@@ -13,12 +13,15 @@ A self-hosted web app for satellite image interpretation and land-cover validati
 - **Multi-source basemaps** — Google Satellite, ESRI World Imagery (latest + Wayback year-end snapshots 2018–2025, no API key required), Bing, Sentinel-2 cloudless (2018–2024), Planet PlanetScope (monthly mosaics 2016–2026)
 - **Dual map / split view** — Compare two basemaps side-by-side with synced pan/zoom
 - **Dynamic classification schemas** — 10 built-in real-world LULC presets (MOLCA, CORINE, IGBP/MODIS, ESA CCI, NLCD, IPCC, Anderson/USGS, FROM-GLC, Binary, Custom). Each project carries its own schema; edit, add, delete classes with color picker and keyboard shortcuts. Save any edited schema as a reusable user preset.
+- **Two assessment modes (per project)** — **Point mode**: classify each sample point directly with one click — ideal for vector point datasets. **Pixel/Plot mode** (Collect Earth Online–compatible): each entry is a pixel/map centre; a correctly-sized Unit of Assessment (UA) square is drawn on the map, a configurable sub-point grid (3×3 or 5×5) is placed inside it, each sub-point is classified individually, and a majority or threshold rule aggregates the sub-point labels to a single plot-level class.
+- **Configurable UA size** — UA square side length is set per project (quick buttons: 10 m / 20 m / 30 m / 50 m or any custom value). The square is computed in real metres using a latitude-correct degree conversion so it always matches the target map pixel (e.g. 30 m for Landsat/CDL, 10 m for Sentinel-2).
 - **Configurable annotation fields** — Each project defines its own per-plot annotation columns: rename the default `notes` text field, or add more fields (text or yes/no binary) such as `cloud_cover`, `damage_observed`. Each field becomes its own column in CSV / property in GeoJSON exports.
+- **NDVI time-series panel** — Floating, draggable Sentinel-2 monthly NDVI panel with a per-class interpretation guide. Requires Sentinel Hub credentials (stored in `.env`).
 - **GIS import** — `.csv` · `.geojson` · `.kml` · `.kmz` · Shapefile (`.zip`). Points and Polygons supported; polygon centroids used for navigation, full geometry drawn on the map.
-- **Server-side API key management** — Planet key stored in `.env` and proxied through the backend; the key never reaches the browser. Esri layers are public — no key needed.
+- **Server-side API key management** — Planet and Sentinel Hub keys stored in `.env` and proxied through the backend; keys never reach the browser. Esri layers are public — no key needed.
 - **Project files on disk** — Each project = one JSON file in `data/projects/`. Portable, version-controllable, easy to share. Export/import any project as a `.json` file.
 - **Auto-save** — Every classification result persists immediately via incremental PATCH to the backend.
-- **Multiple export formats** — CSV (flat results) and GeoJSON (with original geometry preserved). Re-classifying a plot updates the next CSV/GeoJSON export immediately.
+- **Multiple export formats** — CSV (flat results) and GeoJSON (with original geometry preserved). Pixel-mode exports include `assessment_mode`, `ua_size_m`, `sub_point_grid`, and a `sub_points_json` column with the full per-sub-point classification. Re-classifying a plot updates the next export immediately.
 - **Google Earth integration** — One-shot **Google Earth Web** button opens the current plot in a new tab. Live **Google Earth Pro** sync via NetworkLink (`/kml/current.kml`) flies the camera to each plot. Toolbar slider (50–5000 m) controls the camera distance for both, persisted across sessions.
 - **Keyboard shortcuts** — Rapid classification with per-class hotkeys, confidence levels (`h`/`m`/`l`), `Enter` or `Space` to submit, arrow keys to navigate.
 
@@ -93,9 +96,11 @@ earth-label/
 │   └── js/                    ← ES modules (no build step)
 │       ├── app.js             ← Main orchestrator
 │       ├── api.js             ← Backend client
-│       ├── state.js           ← App state
-│       ├── map.js             ← Leaflet dual-map + tile layers
+│       ├── state.js           ← App state (incl. UA / sub-point state)
+│       ├── map.js             ← Leaflet dual-map, UA square, sub-point grid
 │       ├── classes.js         ← Class editor + render
+│       ├── annotation-fields.js ← Per-project annotation inputs + editor
+│       ├── ndvi-panel.js      ← Floating NDVI time-series panel
 │       └── export.js          ← CSV / GeoJSON / project export
 └── data/                      ← Local data (gitignored)
     ├── projects/              ← Project JSON files
@@ -142,16 +147,25 @@ Header matching is **exact and case-insensitive** — `ref_code` and `REF_CODE` 
 ### Output (CSV download)
 
 ```
-PLOTID, LAT, LON, ref_code, ref_label, class_code, class_label, confidence, <annotation fields…>, <meta columns…>
+PLOTID, LAT, LON, ref_code, ref_label, class_code, class_label, confidence,
+assessment_mode, ua_size_m, sub_point_grid, sub_points_json,
+<annotation fields…>, <meta columns…>
 ```
 
-The columns after `confidence` come from the project's **annotation fields** — by default a single text field named `notes`, but you can rename it and add more (yes/no flags, additional text fields) via the ✏ button next to the "Annotations" header in the sidebar. Each field's `key` becomes the column header; values are stored verbatim (binary fields write `yes` / `no` / empty).
+| Column | Description |
+|--------|-------------|
+| `assessment_mode` | `point` or `pixel` |
+| `ua_size_m` | UA square side in metres (pixel mode only, else blank) |
+| `sub_point_grid` | Grid config e.g. `5x5` (pixel mode only, else blank) |
+| `sub_points_json` | JSON array of per-sub-point results `[{idx,code,label},…]` (pixel mode only) |
 
-Any unknown columns from the input upload are appended at the very end in their original order, so the export is a strict superset of the input. A UTF-8 BOM is prepended so Excel renders non-ASCII project / class names correctly. The export reads from live in-memory state, so re-classifying a previous plot is reflected on the **next** download immediately.
+The columns after `sub_points_json` come from the project's **annotation fields** — by default a single text field named `notes`, but you can rename it and add more (yes/no flags, additional text fields) via the ✏ button next to the "Annotations" header in the sidebar. Each field's `key` becomes the column header.
+
+Any unknown columns from the input upload are appended at the very end in their original order, so the export is a strict superset of the input. A UTF-8 BOM is prepended so Excel renders non-ASCII project / class names correctly.
 
 ### Output (GeoJSON download)
 
-Each feature carries the canonical snake-case properties (`plot_id, lat, lon, ref_code, ref_label, class_code, class_label, confidence, project_name, saved_at`), one property per annotation field, plus any extra columns from the original upload, and the original `geometry` (Point or Polygon).
+Each feature carries the canonical snake-case properties (`plot_id, lat, lon, ref_code, ref_label, class_code, class_label, confidence, assessment_mode, project_name, saved_at`), plus `ua_size_m`, `sub_point_grid`, and `sub_points` array in pixel mode, one property per annotation field, and any extra columns from the original upload.
 
 ---
 

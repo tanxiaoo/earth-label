@@ -433,9 +433,12 @@ export function goToPlot(index) {
   api.updateKML(p.lat, p.lon, p.id, p.refLabel || '', state.geRange);
 
   const schema    = state.project?.classSchema || [];
-  const refCls    = schema.find(c => String(c.code) === String(p.refCode));
-  const refColor  = refCls?.color || '#888';
-  const refText   = refCls ? `${refCls.label} (${p.refCode})` : (p.refLabel || '–');
+  // Fall back to meta CDL columns when the CSV used non-standard names
+  const refCode   = p.refCode   ?? p.meta?.cdl_label_code ?? null;
+  const refLabel  = p.refLabel  ?? p.meta?.cdl_label_name ?? (refCode ? String(refCode) : null);
+  const refCls    = schema.find(c => String(c.code) === String(refCode));
+  const refColor  = refCls?.color || '#aaa';
+  const refText   = refCls ? `${refCls.label} (${refCode})` : (refLabel || '–');
   const userCls   = schema.find(c => String(c.code) === String(p.resultCode));
   const userColor = userCls?.color || '#888';
   const userText  = userCls ? `${userCls.label} (${p.resultCode})` : (p.resultLabel || null);
@@ -521,9 +524,12 @@ function _updateClassifyPanelHeader() {
   if (!header || !subPtInfo) return;
 
   if (state.assessmentMode === 'pixel') {
-    const p     = state.plots[state.currentIndex];
-    const total = _subPointTotal();
-    const done  = p ? Object.keys(state.subPointResults[p.id] || {}).length : 0;
+    const p    = state.plots[state.currentIndex];
+    const done = p ? Object.keys(state.subPointResults[p.id] || {}).length : 0;
+    // For completed plots use the stored sub-point count as the authoritative total
+    // so a grid-setting change after submission doesn't show "25/9".
+    const storedTotal = state.project?.results?.[p?.id]?.subPoints?.length;
+    const total = storedTotal ?? _subPointTotal();
     subPtInfo.style.display = 'block';
     subPtInfo.innerHTML = `
       <div class="sp-progress-label">Sub-points: <strong>${done}/${total}</strong></div>
@@ -626,24 +632,22 @@ function _classifySubPoint(classCode) {
 
   const spResults = { ...state.subPointResults };
   spResults[p.id] = { ...(spResults[p.id] || {}), [idx]: { code: classCode, label: cls?.label || '' } };
-  setState({ subPointResults: spResults, selectedClass: null });
+
+  // Clear selectedSubPointIdx BEFORE refreshSubPoint so the just-classified
+  // circle gets its class colour, not the "selected" orange highlight.
+  setState({ subPointResults: spResults, selectedClass: null, selectedSubPointIdx: null });
 
   refreshSubPoint(p.id, idx);
   renderClassButtons();
-
-  const total = _subPointTotal();
-  const done  = Object.keys(spResults[p.id] || {}).length;
   _updateSubPointProgress(p.id);
 
   // Advance to next unclassified sub-point
   const next = _firstUnclassifiedSubPoint(p.id);
   if (next != null) {
     setState({ selectedSubPointIdx: next });
-    highlightSubPoint(idx, next);
+    highlightSubPoint(null, next);
   } else {
     // All sub-points done — unlock submit
-    setState({ selectedSubPointIdx: null });
-    highlightSubPoint(idx, null);
     _showSubPointSummary(p.id);
     updateSubmitBtn();
   }
@@ -664,9 +668,10 @@ function updateConfidenceUI() {
 function updateSubmitBtn() {
   const btn = $('submitBtn');
   if (state.assessmentMode === 'pixel') {
-    const p     = state.plots[state.currentIndex];
-    const total = _subPointTotal();
-    const done  = p ? Object.keys(state.subPointResults[p.id] || {}).length : 0;
+    const p           = state.plots[state.currentIndex];
+    const done        = p ? Object.keys(state.subPointResults[p.id] || {}).length : 0;
+    const storedTotal = state.project?.results?.[p?.id]?.subPoints?.length;
+    const total       = storedTotal ?? _subPointTotal();
     btn.disabled = done < total;
     btn.textContent = done < total
       ? `${total - done} sub-points remaining`
@@ -728,23 +733,24 @@ async function _submitPixelPlot() {
   const agg    = computePlotLabel(plotId);
   if (!agg) return;
 
+  const annotations = readAnnotationInputs();
   const result = {
-    code:       agg.code,
-    label:      agg.label,
-    confidence: state.selectedConfidence,
-    notes:      $('notesInput').value,
-    subPoints:  Object.entries(spRes).map(([idx, v]) => ({ idx: Number(idx), ...v })),
+    code:        agg.code,
+    label:       agg.label,
+    confidence:  state.selectedConfidence,
+    annotations,
+    subPoints:   Object.entries(spRes).map(([idx, v]) => ({ idx: Number(idx), ...v })),
   };
 
   const plots = [...state.plots];
   plots[plotIdx] = { ...plots[plotIdx], resultCode:result.code, resultLabel:result.label,
-                     confidence:result.confidence, notes:result.notes, completed:true };
+                     confidence:result.confidence, annotations, completed:true };
   const results = { ...(state.project.results || {}),
                     [plotId]: { ...result, savedAt: new Date().toISOString() } };
   setState({ plots, project: { ...state.project, results },
              selectedClass:null, selectedConfidence:null, selectedSubPointIdx:null });
 
-  $('notesInput').value = '';
+  clearAnnotationInputs();
   updateProgress();
   renderPlotList();
   api.saveResult(state.project.id, plotId, result).catch(console.error);

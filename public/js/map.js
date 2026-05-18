@@ -230,8 +230,8 @@ function _subPointStyle(idx, spResult, cls) {
     // Classified but class not in schema (edge case)
     return { radius:4, color:'rgba(255,255,255,0.6)', weight:1, fillColor:'#888', fillOpacity:.9 };
   }
-  // Unclassified — hollow circle
-  return { radius:4, color:'rgba(255,255,255,0.7)', weight:1.5, fillColor:'transparent', fillOpacity:0 };
+  // Unclassified — solid black dot with thin white border
+  return { radius:4, color:'rgba(255,255,255,0.5)', weight:1, fillColor:'#111', fillOpacity:1 };
 }
 
 // Refresh one sub-point's visual (call after classifying it)

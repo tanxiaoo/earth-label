@@ -31,13 +31,15 @@ Plain comma-separated. The parser auto-detects column names case-insensitively.
 
 ### Optional columns
 
-| Field            | Accepted aliases |
-|------------------|------------------|
+| Field            | Accepted column names |
+|------------------|-----------------------|
 | Plot ID          | `PLOTID`, `ID`, `FID`, `NAME`, `Plot_ID` |
 | Reference code   | `ref_code` |
 | Reference label  | `ref_label` |
 
-Header matching is **exact and case-insensitive** — `ref_code` and `REF_CODE` are both recognized, but variants like `molca_class`, `molca_class_2024`, or `class_code` are not. If `Plot ID` is absent, the row index is used. All other columns become `meta` and are preserved in both the CSV and GeoJSON exports.
+Header matching is **exact and case-insensitive** — `ref_code` and `REF_CODE` are both recognized, but other variants are not. If `Plot ID` is absent, the row index is used. All other columns become `meta` and are preserved in both CSV and GeoJSON exports.
+
+> **USDA CDL sample files** — The Cochran sample generator (`cochran_sample_test_set.py`) outputs `cdl_label_code` and `cdl_label_name` columns. These are not recognised as reference columns by the parser (they land in `meta`), but EarthLabel's display code falls back to `meta.cdl_label_code` / `meta.cdl_label_name` when `refCode` / `refLabel` are empty, so the Reference badge in the UI still shows correctly. To avoid the fallback and have them treated as canonical reference columns, rename them to `ref_code` / `ref_label` in the CSV before upload.
 
 ### Example
 

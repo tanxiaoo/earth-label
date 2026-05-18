@@ -61,6 +61,25 @@ Pick one of the 10 built-in presets, or **Custom (start blank)** to build your o
 
 After creation, you can edit the schema at any time via the **✏** icon in the right panel.
 
+### Assessment Mode
+
+Choose how each plot entry will be classified. This is set at project creation and can be changed at any time via **⚙ UA** in the sidebar.
+
+| Mode | When to use |
+|------|-------------|
+| **Point** | Your dataset is a set of geographic sample points. Each point gets one classification with a single click. No area boundary is shown on the map. |
+| **Pixel / Plot (CEO)** | Your dataset is pixel centres from a map product (e.g. Landsat CDL at 30 m, Sentinel-2 at 10 m). A Unit of Assessment (UA) square matching the pixel footprint is shown; a sub-point grid inside it is classified point-by-point; the sub-point labels are aggregated to a single plot class. |
+
+**Pixel / Plot settings** (only shown when Pixel mode is selected):
+
+| Setting | Options | Description |
+|---------|---------|-------------|
+| **UA Size** | 10 m / 20 m / 30 m / 50 m / custom | Side length of the UA square in metres. Use 10 m for Sentinel-2, 30 m for Landsat / CDL. |
+| **Sub-point Grid** | 3×3 (9 pts) · 5×5 (25 pts) | Number of sample points placed uniformly inside the UA square. |
+| **Aggregation Rule** | Majority · Threshold % | How sub-point labels are combined into one plot label. *Majority*: the class with the most points wins. *Threshold*: a class must reach the set percentage to win, otherwise majority is used. |
+
+All settings are saved with the project and can be edited without losing existing results via **⚙ UA** in the sidebar.
+
 ---
 
 ## 4. The Interface
@@ -112,18 +131,31 @@ After creation, you can edit the schema at any time via the **✏** icon in the 
 
 ## 5. Classifying Plots
 
-The standard workflow:
+### Point Mode
 
 1. Click any plot in the left sidebar (or use **Next →**) to fly the map to it
-2. The dashed orange square shows the 70m reference area
-3. If you imported polygons, the polygon outline shows in cyan
+2. A blue dot marks the sample point
+3. If you imported polygons the outline shows in cyan
 4. Examine the imagery (switch basemaps or use split view to compare)
 5. Click a class button or press its keyboard shortcut
 6. Set confidence: `h` / `m` / `l`
-7. Fill in any annotation fields (text, yes/no toggles — see section 7b for how to configure)
+7. Fill in any annotation fields
 8. **Enter** or click **Submit & Next →**
 
-The plot is marked **Done** in the list and the next pending plot loads automatically.
+### Pixel / Plot Mode (CEO)
+
+1. Navigate to a plot — the dashed orange square (the **UA**) appears on the map, sized exactly to the configured pixel footprint. A small label (e.g. `30 m`) shows below the square.
+2. Sub-point circles fill the UA square: **black dot** = not yet classified; **coloured dot** = classified with that class colour; **orange dot** = currently active.
+3. The right panel header shows **Sub-point X of N** and a row of coloured progress dots.
+4. Click a sub-point circle on the map to select it, or the app auto-selects the next unclassified one.
+5. Press a class keyboard shortcut or click a class button — the sub-point is instantly classified, its circle fills with the class colour, and the next unclassified sub-point is selected automatically.
+6. Repeat until all sub-points are done. The header switches to **Plot Summary** showing the aggregated class.
+7. Set confidence and fill annotation fields for the plot as a whole.
+8. Click **Submit Plot & Next →** (or **Enter**) to save and advance.
+
+The **Reference** badge shows the map-product label for this pixel. If your CSV uses `ref_code` / `ref_label` columns they are used directly; columns named `cdl_label_code` / `cdl_label_name` are also recognised as a fallback so USDA CDL sample files work without renaming.
+
+> **Changing UA settings mid-project** — use **⚙ UA** in the sidebar. Changes apply to all new navigations; existing classified plots are unaffected.
 
 ---
 
