@@ -431,6 +431,7 @@ export function goToPlot(index) {
   setState({ isFirstPlotLoad: false });
 
   _syncKml(p);
+  _updateImageSourceDisplay();
 
   const schema    = state.project?.classSchema || [];
   // Fall back to meta CDL columns when the CSV used non-standard names
@@ -503,10 +504,19 @@ export function toggleGepMode() {
   if (btn)   btn.classList.toggle('gep-active', gepActive);
   if (input) input.style.display = gepActive ? 'inline-block' : 'none';
   if (!gepActive && input) input.value = '';
+  _updateImageSourceDisplay();
 }
 
 export function onGepYearInput(value) {
   setState({ gepYear: value.trim() });
+  _updateImageSourceDisplay();
+}
+
+export function _updateImageSourceDisplay() {
+  const el = document.getElementById('imageSrcIndicator');
+  if (!el) return;
+  const { source, date } = _readActiveImageSource();
+  el.textContent = (date && date !== 'current') ? `${source} · ${date}` : source;
 }
 
 // Returns { source, date } for the currently active left basemap.
@@ -940,8 +950,12 @@ window.app = {
   setProjectSort, showProjectListView, deleteCurrentProject,
   importProjectFile, onImportProjectFile, exportProjectFile, loadDemoData,
   goToPlot, nextPlot, prevPlot, filterPlots,
-  toggleSplitView, switchBasemap, setMapLayer,
-  updateEsriYear, updateSentinel2Year, updatePlanetParams,
+  toggleSplitView,
+  switchBasemap:       (name)       => { switchBasemap(name);       _updateImageSourceDisplay(); },
+  setMapLayer:         (side, name) => { setMapLayer(side, name);   _updateImageSourceDisplay(); },
+  updateEsriYear:      ()           => { updateEsriYear();          _updateImageSourceDisplay(); },
+  updateSentinel2Year: ()           => { updateSentinel2Year();     _updateImageSourceDisplay(); },
+  updatePlanetParams:  ()           => { updatePlanetParams();      _updateImageSourceDisplay(); },
   selectClass, setConfidence, submitClassification,
   selectSubPoint, computePlotLabel,
   openSettings, closeSettings, saveSettings, clearKey,
