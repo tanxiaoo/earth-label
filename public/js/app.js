@@ -787,10 +787,9 @@ function _classifySubPoint(classCode) {
     setState({ selectedSubPointIdx: next });
     highlightSubPoint(null, next);
   } else {
-    // All sub-points done — unlock submit
     _showSubPointSummary(p.id);
-    updateSubmitBtn();
   }
+  updateSubmitBtn();
   _updateClassifyPanelHeader();
   _syncKml(p);
 }

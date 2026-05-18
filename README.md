@@ -21,8 +21,10 @@ A self-hosted web app for satellite image interpretation and land-cover validati
 - **Server-side API key management** — Planet and Sentinel Hub keys stored in `.env` and proxied through the backend; keys never reach the browser. Esri layers are public — no key needed.
 - **Project files on disk** — Each project = one JSON file in `data/projects/`. Portable, version-controllable, easy to share. Export/import any project as a `.json` file.
 - **Auto-save** — Every classification result persists immediately via incremental PATCH to the backend.
-- **Multiple export formats** — CSV (flat results) and GeoJSON (with original geometry preserved). Pixel-mode exports include `assessment_mode`, `ua_size_m`, `sub_point_grid`, and a `sub_points_json` column with the full per-sub-point classification. Re-classifying a plot updates the next export immediately.
-- **Google Earth integration** — One-shot **Google Earth Web** button opens the current plot in a new tab. Live **Google Earth Pro** sync via NetworkLink (`/kml/current.kml`) flies the camera to each plot. Toolbar slider (50–5000 m) controls the camera distance for both, persisted across sessions.
+- **Image source logging** — On every submit, the active basemap and selected year/date are automatically recorded (`image_source`, `image_date`). A live indicator above the Submit button shows what will be saved (e.g. `Planet · 2024-06`). Use the **📡 GEP** toggle to mark Google Earth Pro as the reference and enter the year from GEP's time slider.
+- **Per-point time tracking** — A MM:SS live timer starts on each plot navigation. Pause/Resume (⏸/▶) stops the clock during interruptions. `time_spent_s` is saved with every result and exported — useful for estimating total annotation time at scale and flagging difficult plots.
+- **Multiple export formats** — CSV (flat results) and GeoJSON (with original geometry preserved). Point-mode exports include only core result columns. Pixel-mode exports additionally include `ua_size_m`, `sub_point_grid`, per-sub-point class columns (`sp_0`…`sp_N-1`), `sub_point_total`, `sub_point_dominant_count`, `sub_point_agreement_pct`, and `sub_points_json`. Re-classifying a plot updates the next export immediately.
+- **Google Earth integration** — One-shot **Google Earth Web** button opens the current plot in a new tab. Live **Google Earth Pro** sync via NetworkLink (`/kml/current.kml`) flies the camera to each plot on submit. In pixel mode, the KML includes the UA square polygon and colour-coded sub-point placemarks. Toolbar slider (50–5000 m) controls camera distance, persisted across sessions.
 - **Keyboard shortcuts** — Rapid classification with per-class hotkeys, confidence levels (`h`/`m`/`l`), `Enter` or `Space` to submit, arrow keys to navigate.
 
 ---
@@ -146,26 +148,41 @@ Header matching is **exact and case-insensitive** — `ref_code` and `REF_CODE` 
 
 ### Output (CSV download)
 
+**Point mode** columns (always present):
+
 ```
 PLOTID, LAT, LON, ref_code, ref_label, class_code, class_label, confidence,
-assessment_mode, ua_size_m, sub_point_grid, sub_points_json,
+image_source, image_date, time_spent_s, assessment_mode,
 <annotation fields…>, <meta columns…>
+```
+
+**Pixel mode** adds after `assessment_mode`:
+
+```
+ua_size_m, sub_point_grid, sub_points_json,
+sub_point_total, sub_point_dominant_count, sub_point_agreement_pct,
+sp_0, sp_1, … sp_N-1
 ```
 
 | Column | Description |
 |--------|-------------|
+| `image_source` | Basemap used when classifying (e.g. `Planet`, `ESRI Wayback`, `Google Earth Pro`) |
+| `image_date` | Year or year-month of the image (e.g. `2024-06`, `2022`) — blank for Google/Bing current |
+| `time_spent_s` | Seconds spent classifying this plot (pause time excluded) |
 | `assessment_mode` | `point` or `pixel` |
-| `ua_size_m` | UA square side in metres (pixel mode only, else blank) |
-| `sub_point_grid` | Grid config e.g. `5x5` (pixel mode only, else blank) |
-| `sub_points_json` | JSON array of per-sub-point results `[{idx,code,label},…]` (pixel mode only) |
+| `ua_size_m` | UA square side in metres *(pixel mode only)* |
+| `sub_point_grid` | Grid config e.g. `3x3` *(pixel mode only)* |
+| `sub_points_json` | Raw JSON array `[{idx,code,label},…]` *(pixel mode only)* |
+| `sub_point_total` | Number of classified sub-points *(pixel mode only)* |
+| `sub_point_dominant_count` | Sub-points matching the winning class *(pixel mode only)* |
+| `sub_point_agreement_pct` | Agreement % for the winning class e.g. `77.8` *(pixel mode only)* |
+| `sp_0` … `sp_N-1` | Class label for each grid position *(pixel mode only; 9 cols for 3×3, 25 for 5×5)* |
 
-The columns after `sub_points_json` come from the project's **annotation fields** — by default a single text field named `notes`, but you can rename it and add more (yes/no flags, additional text fields) via the ✏ button next to the "Annotations" header in the sidebar. Each field's `key` becomes the column header.
-
-Any unknown columns from the input upload are appended at the very end in their original order, so the export is a strict superset of the input. A UTF-8 BOM is prepended so Excel renders non-ASCII project / class names correctly.
+The columns after the UA block come from the project's **annotation fields** — by default a single text field named `notes`. Any unrecognised columns from the original upload are appended at the end, so the export is a strict superset of the input. A UTF-8 BOM is prepended so Excel renders non-ASCII names correctly.
 
 ### Output (GeoJSON download)
 
-Each feature carries the canonical snake-case properties (`plot_id, lat, lon, ref_code, ref_label, class_code, class_label, confidence, assessment_mode, project_name, saved_at`), plus `ua_size_m`, `sub_point_grid`, and `sub_points` array in pixel mode, one property per annotation field, and any extra columns from the original upload.
+Each feature carries the canonical snake-case properties (`plot_id, lat, lon, ref_code, ref_label, class_code, class_label, confidence, image_source, image_date, time_spent_s, assessment_mode, project_name, saved_at`), plus `ua_size_m`, `sub_point_grid`, `sub_points`, `sub_point_total`, `sub_point_dominant_count`, `sub_point_agreement_pct` in pixel mode, one property per annotation field, and any extra columns from the original upload.
 
 ---
 
