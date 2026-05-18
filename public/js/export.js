@@ -48,7 +48,50 @@ const FIXED_CSV_COLUMNS = [
     if (!sp || !sp.length) return '';
     return JSON.stringify(sp);
   }],
+  ['sub_point_total', p => {
+    if (state.assessmentMode !== 'pixel') return '';
+    const sp = state.project?.results?.[p.id]?.subPoints;
+    return (sp && sp.length) ? sp.length : '';
+  }],
+  ['sub_point_dominant_count', p => {
+    if (state.assessmentMode !== 'pixel') return '';
+    const sp = state.project?.results?.[p.id]?.subPoints;
+    if (!sp || !sp.length) return '';
+    const winCode = state.project?.results?.[p.id]?.code;
+    return sp.filter(s => s.code === winCode).length;
+  }],
+  ['sub_point_agreement_pct', p => {
+    if (state.assessmentMode !== 'pixel') return '';
+    const sp = state.project?.results?.[p.id]?.subPoints;
+    if (!sp || !sp.length) return '';
+    const winCode = state.project?.results?.[p.id]?.code;
+    const dominant = sp.filter(s => s.code === winCode).length;
+    return (dominant / sp.length * 100).toFixed(1);
+  }],
 ];
+
+// ── Per-sub-point columns (pixel mode) ───────────────────────────────────
+// Generates one column per grid position: sp_0, sp_1, … sp_8 for 3×3.
+// Value is the class label assigned to that sub-point, empty if unclassified.
+function _subPointCount() {
+  if (state.assessmentMode !== 'pixel') return 0;
+  const [r, c] = (state.subPointGrid || '3x3').split('x').map(Number);
+  return r * c;
+}
+
+function _subPointHeaders() {
+  return Array.from({ length: _subPointCount() }, (_, i) => `sp_${i}`);
+}
+
+function _subPointValues(plot) {
+  const n = _subPointCount();
+  if (!n) return [];
+  const sp = state.project?.results?.[plot.id]?.subPoints || [];
+  return Array.from({ length: n }, (_, i) => {
+    const pt = sp.find(s => s.idx === i);
+    return pt ? pt.label : '';
+  });
+}
 
 // Per-project annotation fields default to a single text field named `notes`
 // when the project doesn't define any — matches pre-feature behavior.
@@ -82,14 +125,18 @@ export function exportCSV() {
     }
   }
 
+  const spHeaders = _subPointHeaders();
+
   const header = [
     ...FIXED_CSV_COLUMNS.map(([h]) => h),
+    ...spHeaders,
     ...annoFields.map(f => f.key),
     ...metaKeys,
   ].join(',');
 
   const rows = plots.map(p => [
     ...FIXED_CSV_COLUMNS.map(([, get]) => _csvEscape(get(p))),
+    ..._subPointValues(p).map(_csvEscape),
     ...annoFields.map(f => _csvEscape(_annoValue(p, f.key))),
     ...metaKeys.map(k => _csvEscape(p.meta?.[k])),
   ].join(','));
@@ -121,8 +168,13 @@ function _geoJsonProps(plot) {
   if (state.assessmentMode === 'pixel') {
     base.ua_size_m      = state.plotSizeM;
     base.sub_point_grid = state.subPointGrid;
-    const sp = state.project?.results?.[plot.id]?.subPoints;
-    base.sub_points     = sp || [];
+    const sp      = state.project?.results?.[plot.id]?.subPoints || [];
+    const winCode = state.project?.results?.[plot.id]?.code;
+    const dominant = sp.filter(s => s.code === winCode).length;
+    base.sub_points              = sp;
+    base.sub_point_total         = sp.length || null;
+    base.sub_point_dominant_count = sp.length ? dominant : null;
+    base.sub_point_agreement_pct  = sp.length ? parseFloat((dominant / sp.length * 100).toFixed(1)) : null;
   }
   return base;
 }
