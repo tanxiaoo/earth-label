@@ -236,6 +236,9 @@ function positionOnElement(el, position) {
   const PAD  = 10;
   const rect = el.getBoundingClientRect();
 
+  // Element is hidden (display:none or off-screen) — center the card instead
+  if (!rect.width && !rect.height) { centerCard(); return; }
+
   // Move cutout over the element
   const cutout = $('tourCutout');
   cutout.style.left   = `${rect.left   - PAD}px`;
