@@ -292,7 +292,8 @@
       <h1>EarthLabel</h1>
       <div class="subtitle">Land Cover Classification</div>
     </div>
-    <button class="icon-btn" onclick="app.openSettings()" title="Settings">⚙</button>
+    <button class="icon-btn" onclick="app.openSettings()" title="Settings" data-tutorial="settings">⚙</button>
+    <button class="icon-btn" onclick="app.startTutorial()" title="Take a tour" style="font-size:13px;font-weight:700;">?</button>
   </div>
 
   <!-- PROJECT LIST VIEW -->
@@ -304,7 +305,7 @@
       </div>
       <div style="display:flex;gap:6px;">
         <button class="basemap-btn" style="padding:4px 10px;" onclick="app.importProjectFile()" title="Open project file">📂</button>
-        <button class="basemap-btn" style="padding:4px 10px;" onclick="app.openCreateProjectModal()">+ New</button>
+        <button class="basemap-btn" style="padding:4px 10px;" onclick="app.openCreateProjectModal()" data-tutorial="create-project">+ New</button>
       </div>
     </div>
     <div class="plot-list" id="projectListContainer"></div>
@@ -315,7 +316,7 @@
     <div class="sidebar-toolbar" style="justify-content:space-between;">
       <button class="basemap-btn" style="border:none;padding:0;display:flex;align-items:center;gap:4px;font-size:12px;" onclick="app.showProjectListView()">← Projects</button>
       <div style="display:flex;gap:6px;">
-        <button class="basemap-btn" style="padding:4px 10px;font-size:11px;" onclick="app.openProjectSettings()" title="Assessment / UA settings">⚙ UA</button>
+        <button class="basemap-btn" style="padding:4px 10px;font-size:11px;" onclick="app.openProjectSettings()" title="Assessment / UA settings" data-tutorial="ua-badge">⚙ UA</button>
         <button class="basemap-btn" style="padding:4px 10px;font-size:11px;" onclick="app.exportProjectFile()" title="Export project JSON">↓</button>
         <button class="basemap-btn" style="padding:4px 10px;font-size:11px;color:var(--danger);border-color:var(--danger);" onclick="app.deleteCurrentProject()">🗑</button>
       </div>
@@ -333,7 +334,7 @@
       <div class="progress-text" id="progressText">0 / 0</div>
     </div>
 
-    <div class="filter-section">
+    <div class="filter-section" data-tutorial="plot-list">
       <button class="filter-btn active" id="filter-all"     onclick="app.filterPlots('all')">All</button>
       <button class="filter-btn"        id="filter-pending" onclick="app.filterPlots('pending')">Pending</button>
       <button class="filter-btn"        id="filter-done"    onclick="app.filterPlots('done')">Done</button>
@@ -346,10 +347,10 @@
 <!-- ════════════════════════════════════════════════════ MAP AREA ══════════ -->
 <div class="main-area">
   <div class="map-toolbar">
-    <button class="basemap-btn" onclick="app.toggleSplitView()" id="btn-split">◫ Split</button>
+    <button class="basemap-btn" onclick="app.toggleSplitView()" id="btn-split" data-tutorial="split-view">◫ Split</button>
     <div class="toolbar-separator"></div>
     <!-- Global basemap buttons (hidden in split mode) -->
-    <div class="global-basemaps" style="display:flex;gap:6px;align-items:center;">
+    <div class="global-basemaps" style="display:flex;gap:6px;align-items:center;" data-tutorial="basemaps">
       <button class="basemap-btn active" onclick="app.switchBasemap('google')"    id="btn-google">Google</button>
       <button class="basemap-btn"        onclick="app.switchBasemap('esri')"      id="btn-esri">ESRI</button>
       <select id="esri-year"    class="basemap-btn" style="display:none;" onchange="app.updateEsriYear()">
@@ -385,12 +386,12 @@
       </select>
       <div class="toolbar-separator"></div>
     </div>
-    <button class="basemap-btn" id="btn-ndvi" onclick="app.toggleNdviPanel()" title="Toggle the floating NDVI time-series panel" aria-label="Toggle NDVI panel"><span class="ndvi-icon" aria-hidden="true"></span>NDVI</button>
+    <button class="basemap-btn" id="btn-ndvi" onclick="app.toggleNdviPanel()" title="Toggle the floating NDVI time-series panel" aria-label="Toggle NDVI panel" data-tutorial="ndvi-btn"><span class="ndvi-icon" aria-hidden="true"></span>NDVI</button>
     <div class="toolbar-separator"></div>
     <button class="nav-btn prev" onclick="app.prevPlot()">← Prev</button>
     <button class="nav-btn next" onclick="app.nextPlot()">Next →</button>
     <button class="nav-btn" id="btn-ge" onclick="app.openGoogleEarth()" disabled title="Open this plot in Google Earth Web (new tab)" style="background:#2a2d3a;color:var(--text);">🌍 Google Earth</button>
-    <button class="nav-btn" id="btn-gep" onclick="app.toggleGepMode()" title="Toggle: I am using Google Earth Pro as my reference for this classification" style="background:#2a2d3a;color:var(--text);">📡 GEP</button>
+    <button class="nav-btn" id="btn-gep" onclick="app.toggleGepMode()" title="Toggle: I am using Google Earth Pro as my reference for this classification" style="background:#2a2d3a;color:var(--text);" data-tutorial="gep-btn">📡 GEP</button>
     <input type="number" id="gepYearInput" min="2000" max="2030" placeholder="GEP year"
            oninput="app.onGepYearInput(this.value)"
            title="Year you are viewing in Google Earth Pro's time slider"
@@ -493,9 +494,9 @@
     </div>
   </div>
 
-  <div class="class-list" id="classList"></div>
+  <div class="class-list" id="classList" data-tutorial="class-list"></div>
 
-  <div class="confidence-section">
+  <div class="confidence-section" data-tutorial="confidence">
     <label>Confidence</label>
     <div class="confidence-row">
       <button class="conf-btn" onclick="app.setConfidence('High')">High</button>
@@ -513,16 +514,16 @@
   </div>
 
   <div class="submit-section">
-    <small id="imageSrcIndicator" style="display:block;text-align:center;color:var(--text-dim);font-size:11px;margin-bottom:6px;letter-spacing:.01em;"></small>
-    <div style="display:flex;align-items:center;justify-content:space-between;background:#1a1d2e;border-radius:6px;padding:5px 10px;margin-bottom:6px;position:relative;">
+    <small id="imageSrcIndicator" data-tutorial="image-source" style="display:block;text-align:center;color:var(--text-dim);font-size:11px;margin-bottom:6px;letter-spacing:.01em;"></small>
+    <div data-tutorial="timer" style="display:flex;align-items:center;justify-content:space-between;background:#1a1d2e;border-radius:6px;padding:5px 10px;margin-bottom:6px;position:relative;">
       <span style="font-size:11px;color:var(--text-dim);">⏱ Time</span>
       <span id="timerDisplay" style="font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--text);">0:00</span>
       <span id="timerResumedNotif" style="position:absolute;left:50%;transform:translateX(-50%);bottom:calc(100% + 4px);background:#22c55e;color:#fff;font-size:10px;padding:2px 7px;border-radius:4px;pointer-events:none;opacity:0;transition:opacity .3s;">▶ resumed</span>
       <button id="timerPauseBtn" onclick="app.toggleTimerPause()" title="Pause / Resume timer"
               style="background:transparent;border:1px solid #3a3f55;border-radius:4px;color:var(--text-dim);cursor:pointer;font-size:13px;padding:1px 7px;line-height:1.4;">⏸</button>
     </div>
-    <button class="submit-btn" id="submitBtn" onclick="app.submitClassification()" disabled>Submit &amp; Next →</button>
-    <div style="display:flex;gap:6px;margin-top:8px;">
+    <button class="submit-btn" id="submitBtn" onclick="app.submitClassification()" disabled data-tutorial="submit">Submit &amp; Next →</button>
+    <div style="display:flex;gap:6px;margin-top:8px;" data-tutorial="export">
       <button class="export-btn" onclick="app.exportCSV()" style="flex:1;">↓ CSV</button>
       <button class="export-btn" onclick="app.exportGeoJSON()" style="flex:1;">↓ GeoJSON</button>
     </div>
@@ -600,5 +601,23 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script type="module" src="/js/app.js"></script>
+
+<!-- ══════════════════════════════════════════════ GUIDED TOUR OVERLAY ════ -->
+<div id="tourOverlay" class="hidden">
+  <div id="tourCutout"></div>
+  <div id="tourCard" class="tour-card">
+    <div class="tour-card-header">
+      <span id="tourProgress" class="tour-progress"></span>
+      <button onclick="app.skipTutorial()" class="tour-skip">Skip tour</button>
+    </div>
+    <h3 id="tourTitle" class="tour-title"></h3>
+    <p  id="tourBody"  class="tour-body"></p>
+    <div class="tour-dots" id="tourDots"></div>
+    <div class="tour-nav">
+      <button id="tourPrev" onclick="app.tutorialPrev()" class="tour-btn">← Back</button>
+      <button id="tourNext" onclick="app.tutorialNext()" class="tour-btn tour-btn-primary">Next →</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>

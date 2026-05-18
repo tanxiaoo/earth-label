@@ -675,3 +675,107 @@ body.split-mode .global-basemaps { display:none !important; }
 .ndvi-corner-sw { bottom:0; left:0;     cursor:nesw-resize; }
 /* corner-se is the visible grip above */
 
+
+/* ── GUIDED TOUR ──────────────────────────────────────────────────────── */
+#tourOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9990;
+  pointer-events: none;
+}
+#tourOverlay:not(.hidden) { pointer-events: all; }
+
+/* The transparent cutout — its giant box-shadow darkens everything else */
+#tourCutout {
+  position: fixed;
+  border-radius: 6px;
+  box-shadow: 0 0 0 9999px rgba(0,0,0,0.68);
+  z-index: 9991;
+  pointer-events: none;
+  display: none;
+  transition: left .25s, top .25s, width .25s, height .25s;
+}
+
+/* The floating instruction card */
+.tour-card {
+  position: fixed;
+  width: 310px;
+  background: #1e2130;
+  border: 1px solid #3a3f55;
+  border-radius: 10px;
+  padding: 18px 20px 14px;
+  z-index: 9992;
+  pointer-events: all;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.55);
+  transition: left .25s, top .25s, transform .25s;
+}
+.tour-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.tour-progress {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-family: 'JetBrains Mono', monospace;
+}
+.tour-skip {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0;
+}
+.tour-skip:hover { color: var(--text); }
+.tour-title {
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0 0 8px;
+  color: var(--text);
+}
+.tour-body {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-dim);
+  margin: 0 0 14px;
+}
+.tour-dots {
+  display: flex;
+  gap: 5px;
+  justify-content: center;
+  margin-bottom: 14px;
+}
+.tour-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #3a3f55;
+  transition: background .2s;
+}
+.tour-dot.active { background: var(--accent); }
+.tour-nav {
+  display: flex;
+  gap: 8px;
+}
+.tour-btn {
+  flex: 1;
+  padding: 7px 0;
+  border-radius: 6px;
+  border: 1px solid #3a3f55;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .15s;
+}
+.tour-btn:hover { background: rgba(255,255,255,.06); color: var(--text); }
+.tour-btn:disabled { opacity: .35; cursor: default; }
+.tour-btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.tour-btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); color: #fff; }

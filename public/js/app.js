@@ -11,6 +11,7 @@ import { renderAnnotationInputs, readAnnotationInputs, clearAnnotationInputs,
          openAnnotationFieldsEditor, closeAnnotationFieldsEditor,
          addAnnotationField, saveAnnotationFields } from './annotation-fields.js';
 import { exportCSV, exportGeoJSON, exportProjectFile } from './export.js';
+import { initTutorial, startTutorial, tutorialNext, tutorialPrev, skipTutorial } from './tutorial.js';
 import { initNdviPanel, openNdviPanel, closeNdviPanel, toggleNdviPanel,
          renderForCurrentPlot as renderNdviForCurrentPlot,
          fetchNdvi, refreshNdvi, saveNdviGuide, resetNdviGuide,
@@ -70,6 +71,7 @@ async function init() {
   } catch (_) {}
 
   initNdviPanel();
+  initTutorial();
 
   try {
     const projects = await api.listProjects();
@@ -1039,6 +1041,7 @@ window.app = {
   exportCSV, exportGeoJSON,
   openGoogleEarth, onGeRangeInput, toggleGepMode, onGepYearInput,
   toggleTimerPause,
+  startTutorial, tutorialNext, tutorialPrev, skipTutorial,
   toggleNdviPanel, openNdviPanel, closeNdviPanel,
   fetchNdvi, refreshNdvi, saveNdviGuide, resetNdviGuide,
   toggleNdviGuide, onNdviYearChange, toggleSeasonBand,
