@@ -21,16 +21,10 @@ function _csvEscape(v) {
 }
 
 // ── CSV export ────────────────────────────────────────────────────────────
-// Identity columns are uppercase to match common GIS conventions (PLOTID,
-// LAT, LON). project_name and saved_at are intentionally excluded — the
-// project name is in the filename, and the timestamp is not useful in the
-// per-row results table.
-// New UA columns (pixel mode only):
-//   assessment_mode — "point" | "pixel"
-//   ua_size_m       — UA square side in meters
-//   sub_point_grid  — grid config e.g. "5x5"
-//   sub_points_json — JSON array of per-sub-point results
-const FIXED_CSV_COLUMNS = [
+// BASE_CSV_COLUMNS are always present regardless of assessment mode.
+// UA_CSV_COLUMNS and per-sub-point sp_N columns are appended only for pixel
+// mode projects so point-mode exports stay clean.
+const BASE_CSV_COLUMNS = [
   ['PLOTID',          p => p.id],
   ['LAT',             p => p.lat],
   ['LON',             p => p.lon],
@@ -42,28 +36,26 @@ const FIXED_CSV_COLUMNS = [
   ['image_source',    p => state.project?.results?.[p.id]?.imageSource ?? ''],
   ['image_date',      p => state.project?.results?.[p.id]?.imageDate   ?? ''],
   ['assessment_mode', () => state.assessmentMode],
-  ['ua_size_m',       () => state.assessmentMode === 'pixel' ? state.plotSizeM : ''],
-  ['sub_point_grid',  () => state.assessmentMode === 'pixel' ? state.subPointGrid : ''],
+];
+
+const UA_CSV_COLUMNS = [
+  ['ua_size_m',      () => state.plotSizeM],
+  ['sub_point_grid', () => state.subPointGrid],
   ['sub_points_json', p => {
-    if (state.assessmentMode !== 'pixel') return '';
     const sp = state.project?.results?.[p.id]?.subPoints;
-    if (!sp || !sp.length) return '';
-    return JSON.stringify(sp);
+    return (sp && sp.length) ? JSON.stringify(sp) : '';
   }],
   ['sub_point_total', p => {
-    if (state.assessmentMode !== 'pixel') return '';
     const sp = state.project?.results?.[p.id]?.subPoints;
     return (sp && sp.length) ? sp.length : '';
   }],
   ['sub_point_dominant_count', p => {
-    if (state.assessmentMode !== 'pixel') return '';
     const sp = state.project?.results?.[p.id]?.subPoints;
     if (!sp || !sp.length) return '';
     const winCode = state.project?.results?.[p.id]?.code;
     return sp.filter(s => s.code === winCode).length;
   }],
   ['sub_point_agreement_pct', p => {
-    if (state.assessmentMode !== 'pixel') return '';
     const sp = state.project?.results?.[p.id]?.subPoints;
     if (!sp || !sp.length) return '';
     const winCode = state.project?.results?.[p.id]?.code;
@@ -127,18 +119,22 @@ export function exportCSV() {
     }
   }
 
-  const spHeaders = _subPointHeaders();
+  const isPixel   = state.assessmentMode === 'pixel';
+  const uaCols    = isPixel ? UA_CSV_COLUMNS  : [];
+  const spHeaders = isPixel ? _subPointHeaders() : [];
 
   const header = [
-    ...FIXED_CSV_COLUMNS.map(([h]) => h),
+    ...BASE_CSV_COLUMNS.map(([h]) => h),
+    ...uaCols.map(([h]) => h),
     ...spHeaders,
     ...annoFields.map(f => f.key),
     ...metaKeys,
   ].join(',');
 
   const rows = plots.map(p => [
-    ...FIXED_CSV_COLUMNS.map(([, get]) => _csvEscape(get(p))),
-    ..._subPointValues(p).map(_csvEscape),
+    ...BASE_CSV_COLUMNS.map(([, get]) => _csvEscape(get(p))),
+    ...uaCols.map(([, get]) => _csvEscape(get(p))),
+    ...(isPixel ? _subPointValues(p).map(_csvEscape) : []),
     ...annoFields.map(f => _csvEscape(_annoValue(p, f.key))),
     ...metaKeys.map(k => _csvEscape(p.meta?.[k])),
   ].join(','));
