@@ -26,6 +26,10 @@ export const state = {
   // ── Sub-point tracking (pixel mode, ephemeral — not persisted) ──
   selectedSubPointIdx:  null,    // idx of the currently active sub-point
   subPointResults:      {},      // {plotId: {idx: {code, label}}}
+
+  // ── Google Earth Pro source tracking ──────────────────────────────────────
+  gepActive: false,   // true when user is viewing/using GEP for the current classification
+  gepYear:   '',      // year the user typed in the GEP year input (e.g. "2022")
 };
 
 export function setState(updates) {

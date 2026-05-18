@@ -60,10 +60,11 @@ export async function importProject(file) {
 
 export const exportProjectUrl = (id) => `/api/projects/${id}/export`;
 
-// KML update (Google Earth Pro). `range` is meters from camera to point.
-export const updateKML = (lat, lon, id, label, range) =>
+// KML update (Google Earth Pro). `pixelMode` is null in point mode, or
+// { plotSizeM, subPointGrid, subPointResults[], selectedIdx } in pixel mode.
+export const updateKML = (lat, lon, id, label, range, pixelMode = null) =>
   fetch('/kml/update', { method:'POST', headers:{'Content-Type':'application/json'},
-                          body: JSON.stringify({ lat, lon, id, label, range }) }).catch(() => {});
+                          body: JSON.stringify({ lat, lon, id, label, range, pixelMode }) }).catch(() => {});
 
 export const updateKMLRange = (range) =>
   fetch('/kml/update', { method:'POST', headers:{'Content-Type':'application/json'},

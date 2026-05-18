@@ -430,7 +430,7 @@ export function goToPlot(index) {
   navigateToPlot(p);
   setState({ isFirstPlotLoad: false });
 
-  api.updateKML(p.lat, p.lon, p.id, p.refLabel || '', state.geRange);
+  _syncKml(p);
 
   const schema    = state.project?.classSchema || [];
   // Fall back to meta CDL columns when the CSV used non-standard names
@@ -492,6 +492,68 @@ export function openGoogleEarth() {
     `https://earth.google.com/web/@${p.lat},${p.lon},0a,${d}d,35y,0h,0t,0r`,
     '_blank', 'noopener'
   );
+}
+
+// ── GEP source tracking ───────────────────────────────────────────────────
+export function toggleGepMode() {
+  const gepActive = !state.gepActive;
+  setState({ gepActive, gepYear: gepActive ? state.gepYear : '' });
+  const btn   = $('btn-gep');
+  const input = $('gepYearInput');
+  if (btn)   btn.classList.toggle('gep-active', gepActive);
+  if (input) input.style.display = gepActive ? 'inline-block' : 'none';
+  if (!gepActive && input) input.value = '';
+}
+
+export function onGepYearInput(value) {
+  setState({ gepYear: value.trim() });
+}
+
+// Returns { source, date } for the currently active left basemap.
+function _readActiveImageSource() {
+  if (state.gepActive) {
+    return { source: 'Google Earth Pro', date: state.gepYear || '' };
+  }
+  switch (state.leftBasemap) {
+    case 'esri': {
+      const year = document.getElementById('esri-year')?.value || '';
+      return { source: 'ESRI Wayback', date: year };
+    }
+    case 'sentinel2': {
+      const year = document.getElementById('s2-year')?.value || '';
+      return { source: 'Sentinel-2', date: year };
+    }
+    case 'planet': {
+      const year  = document.getElementById('planet-year')?.value  || '';
+      const month = document.getElementById('planet-month')?.value || '';
+      return { source: 'Planet', date: month ? `${year}-${month}` : year };
+    }
+    case 'bing':
+      return { source: 'Bing', date: 'current' };
+    default:
+      return { source: 'Google', date: 'current' };
+  }
+}
+
+// Builds the pixelMode payload for /kml/update from current state.
+function _buildPixelModeForKml(plotId) {
+  if (state.assessmentMode !== 'pixel') return null;
+  const spRes  = state.subPointResults[plotId] || {};
+  const schema = state.project?.classSchema || [];
+  return {
+    plotSizeM:       state.plotSizeM,
+    subPointGrid:    state.subPointGrid,
+    selectedIdx:     state.selectedSubPointIdx,
+    subPointResults: Object.entries(spRes).map(([idx, v]) => {
+      const cls = schema.find(c => String(c.code) === String(v.code));
+      return { idx: Number(idx), code: v.code, label: v.label, color: cls?.color || '#888888' };
+    }),
+  };
+}
+
+function _syncKml(p) {
+  if (!p) return;
+  api.updateKML(p.lat, p.lon, p.id, p.refLabel || '', state.geRange, _buildPixelModeForKml(p.id));
 }
 
 export function onGeRangeInput(value) {
@@ -616,9 +678,9 @@ export function selectSubPoint(idx) {
   setState({ selectedSubPointIdx: idx });
   highlightSubPoint(prev, idx);
   _updateClassifyPanelHeader();
-  // Clear class selection so keyboard shortcut targets new sub-point
   setState({ selectedClass: null });
   renderClassButtons();
+  _syncKml(state.plots[state.currentIndex]);
 }
 
 function _classifySubPoint(classCode) {
@@ -652,6 +714,7 @@ function _classifySubPoint(classCode) {
     updateSubmitBtn();
   }
   _updateClassifyPanelHeader();
+  _syncKml(p);
 }
 
 export function setConfidence(level) {
@@ -699,11 +762,14 @@ async function _submitPointPlot() {
   const plotIdx = state.currentIndex;
   const plotId  = state.plots[plotIdx].id;
   const annotations = readAnnotationInputs();
+  const { source: imageSource, date: imageDate } = _readActiveImageSource();
   const result  = {
-    code:       state.selectedClass,
-    label:      cls?.label || '',
-    confidence: state.selectedConfidence,
+    code:        state.selectedClass,
+    label:       cls?.label || '',
+    confidence:  state.selectedConfidence,
     annotations,
+    imageSource,
+    imageDate,
   };
 
   const plots = [...state.plots];
@@ -734,11 +800,14 @@ async function _submitPixelPlot() {
   if (!agg) return;
 
   const annotations = readAnnotationInputs();
+  const { source: imageSource, date: imageDate } = _readActiveImageSource();
   const result = {
     code:        agg.code,
     label:       agg.label,
     confidence:  state.selectedConfidence,
     annotations,
+    imageSource,
+    imageDate,
     subPoints:   Object.entries(spRes).map(([idx, v]) => ({ idx: Number(idx), ...v })),
   };
 
@@ -883,7 +952,7 @@ window.app = {
   openAnnotationFieldsEditor, closeAnnotationFieldsEditor,
   addAnnotationField, saveAnnotationFields,
   exportCSV, exportGeoJSON,
-  openGoogleEarth, onGeRangeInput,
+  openGoogleEarth, onGeRangeInput, toggleGepMode, onGepYearInput,
   toggleNdviPanel, openNdviPanel, closeNdviPanel,
   fetchNdvi, refreshNdvi, saveNdviGuide, resetNdviGuide,
   toggleNdviGuide, onNdviYearChange,

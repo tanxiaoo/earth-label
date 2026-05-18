@@ -390,6 +390,11 @@
     <button class="nav-btn prev" onclick="app.prevPlot()">← Prev</button>
     <button class="nav-btn next" onclick="app.nextPlot()">Next →</button>
     <button class="nav-btn" id="btn-ge" onclick="app.openGoogleEarth()" disabled title="Open this plot in Google Earth Web (new tab)" style="background:#2a2d3a;color:var(--text);">🌍 Google Earth</button>
+    <button class="nav-btn" id="btn-gep" onclick="app.toggleGepMode()" title="Toggle: I am using Google Earth Pro as my reference for this classification" style="background:#2a2d3a;color:var(--text);">📡 GEP</button>
+    <input type="number" id="gepYearInput" min="2000" max="2030" placeholder="GEP year"
+           oninput="app.onGepYearInput(this.value)"
+           title="Year you are viewing in Google Earth Pro's time slider"
+           style="display:none;width:76px;padding:3px 5px;background:#1e2030;color:var(--text);border:1px solid #3a3f55;border-radius:4px;font-size:12px;">
     <div class="ge-range" title="Camera distance (meters) for Google Earth Pro live sync and Google Earth Web.">
       <input type="range" id="geRangeSlider" min="50" max="5000" step="50" value="1000"
              oninput="app.onGeRangeInput(this.value)">
