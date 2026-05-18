@@ -5,21 +5,15 @@
 const router = require('express').Router();
 
 const DEFAULT_RANGE = 1000;
-let currentPlot = {
-  lat: 0, lon: 0, id: '', label: '', range: DEFAULT_RANGE, pixelMode: null,
-  flyTo: false,   // set true when plot changes; cleared after first KML response
-};
+let currentPlot = { lat: 0, lon: 0, id: '', label: '', range: DEFAULT_RANGE, pixelMode: null };
 
 router.post('/update', (req, res) => {
   const { lat, lon, id, label, range, pixelMode } = req.body;
   if (lat != null && lon != null) {
-    // Trigger a camera fly only when the plot actually moves to a new location.
-    const plotMoved = (lat !== currentPlot.lat || lon !== currentPlot.lon);
     currentPlot.lat   = lat;
     currentPlot.lon   = lon;
     currentPlot.id    = id    || '';
     currentPlot.label = label || '';
-    if (plotMoved) currentPlot.flyTo = true;
   }
   const r = Number(range);
   if (Number.isFinite(r) && r > 0) currentPlot.range = r;
@@ -110,28 +104,12 @@ function _subPointsKml(lat, lon, pixelMode) {
 }
 
 // ── KML endpoint ──────────────────────────────────────────────────────────
+// google_earth_link.kml has <flyToView>1</flyToView> on the NetworkLink,
+// which tells GEP to fly the camera to the <LookAt> in this response on
+// every poll. The zoom slider works by updating range here each second.
 router.get('/current.kml', (req, res) => {
   const { lat, lon, id, label, range, pixelMode } = currentPlot;
   const isPixel = pixelMode && pixelMode.plotSizeM;
-
-  // Consume the flyTo flag — GEP gets one camera-fly per plot change.
-  const shouldFly = currentPlot.flyTo;
-  currentPlot.flyTo = false;
-
-  // <NetworkLinkControl> with a <LookAt> forces GEP to fly the camera on
-  // this poll. Without it, GEP only respects <LookAt> on the initial load.
-  const networkLinkControl = shouldFly ? `
-  <NetworkLinkControl>
-    <flyToView>1</flyToView>
-    <LookAt>
-      <longitude>${lon}</longitude>
-      <latitude>${lat}</latitude>
-      <altitude>0</altitude>
-      <heading>0</heading>
-      <tilt>0</tilt>
-      <range>${range}</range>
-    </LookAt>
-  </NetworkLinkControl>` : '';
 
   const placemarks = isPixel
     ? _uaSquareKml(lat, lon, pixelMode.plotSizeM, id) + _subPointsKml(lat, lon, pixelMode)
@@ -147,9 +125,16 @@ router.get('/current.kml', (req, res) => {
   res.setHeader('Content-Type', 'application/vnd.google-earth.kml+xml');
   res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2">
-  ${networkLinkControl}
   <Document>
     <name>EarthLabel Live</name>
+    <LookAt>
+      <longitude>${lon}</longitude>
+      <latitude>${lat}</latitude>
+      <altitude>0</altitude>
+      <heading>0</heading>
+      <tilt>0</tilt>
+      <range>${range}</range>
+    </LookAt>
     ${placemarks}
   </Document>
 </kml>`);
