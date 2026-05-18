@@ -140,7 +140,20 @@ const qs = sel => document.querySelector(sel);
 
 // ── Public API ────────────────────────────────────────────────────────────
 export function initTutorial() {
-  // Nothing to do on init — tour only starts on user request.
+  // Wire navigation directly — avoid relying on window.app from onclick attrs
+  // inside the fixed overlay, which can silently fail in some browsers.
+  document.addEventListener('DOMContentLoaded', _wireButtons);
+  // Also try immediately in case DOM is already ready
+  if (document.readyState !== 'loading') _wireButtons();
+}
+
+function _wireButtons() {
+  const nextBtn = $('tourNext');
+  const prevBtn = $('tourPrev');
+  const skipBtn = document.querySelector('.tour-skip');
+  if (nextBtn) nextBtn.addEventListener('click', tutorialNext);
+  if (prevBtn) prevBtn.addEventListener('click', tutorialPrev);
+  if (skipBtn) skipBtn.addEventListener('click',  skipTutorial);
 }
 
 export function startTutorial() {
@@ -179,12 +192,25 @@ export function skipTutorial() {
 function showStep() {
   const s = TUTORIAL_STEPS[step];
 
-  // Update card text
-  $('tourTitle').textContent    = s.title;
-  $('tourBody').textContent     = s.body;
-  $('tourProgress').textContent = `${step + 1} / ${TUTORIAL_STEPS.length}`;
-  $('tourPrev').disabled        = step === 0;
-  $('tourNext').textContent     = step === TUTORIAL_STEPS.length - 1 ? 'Finish' : 'Next →';
+  // Update card text — apply inline styles to guarantee visibility
+  // regardless of any CSS cascade issues inside the fixed overlay.
+  const titleEl = $('tourTitle');
+  const bodyEl  = $('tourBody');
+  const progEl  = $('tourProgress');
+  const prevBtn = $('tourPrev');
+  const nextBtn = $('tourNext');
+
+  if (titleEl) {
+    titleEl.textContent = s.title;
+    titleEl.style.cssText = 'color:#e4e4e7;font-size:14px;font-weight:700;margin:0 0 10px;display:block;';
+  }
+  if (bodyEl) {
+    bodyEl.textContent = s.body;
+    bodyEl.style.cssText = 'color:#a0a3b1;font-size:12px;line-height:1.65;margin:0 0 14px;display:block;';
+  }
+  if (progEl) progEl.textContent = `${step + 1} / ${TUTORIAL_STEPS.length}`;
+  if (prevBtn) prevBtn.disabled  = step === 0;
+  if (nextBtn) nextBtn.textContent = step === TUTORIAL_STEPS.length - 1 ? 'Finish' : 'Next →';
 
   // Update progress dots
   const dots = document.querySelectorAll('.tour-dot');
