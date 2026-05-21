@@ -19,6 +19,7 @@ export const state = {
   //                 "pixel" → CEO methodology: UA square + sub-point grid
   assessmentMode:       'point',
   plotSizeM:            30,      // UA square side length in meters (pixel mode)
+  pointBoxSizeM:        30,      // Optional square overlay side length in meters (point mode); 0 = off
   subPointGrid:         '5x5',   // "3x3" (9 pts) | "5x5" (25 pts)
   aggregationRule:      'majority', // "majority" | "threshold"
   aggregationThreshold: 0.5,     // fraction needed to win (threshold rule)

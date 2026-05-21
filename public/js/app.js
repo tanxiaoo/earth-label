@@ -162,6 +162,7 @@ async function loadProject(id) {
     // UA settings from project file
     assessmentMode:       proj.assessmentMode       || 'point',
     plotSizeM:            proj.plotSizeM            || 30,
+    pointBoxSizeM:        proj.pointBoxSizeM ?? 30,
     subPointGrid:         proj.subPointGrid         || '5x5',
     aggregationRule:      proj.aggregationRule      || 'majority',
     aggregationThreshold: proj.aggregationThreshold || 0.5,
@@ -234,6 +235,7 @@ export function openCreateProjectModal() {
   if (ptRadio) ptRadio.checked = true;
   _toggleCreateUAFields('point');
   $('createPlotSizeM').value   = '30';
+  $('createPointBoxSizeM').value = '30';
   $('createSubGrid').value     = '5x5';
   $('createAggRule').value     = 'majority';
   $('createAggThreshold').value = '50';
@@ -253,6 +255,8 @@ export function onCreateAssessModeChange() {
 function _toggleCreateUAFields(mode) {
   const el = $('createUAFields');
   if (el) el.style.display = mode === 'pixel' ? 'block' : 'none';
+  const pt = $('createPointFields');
+  if (pt) pt.style.display = mode === 'point' ? 'block' : 'none';
 }
 
 export async function onPresetChange() {
@@ -273,6 +277,7 @@ export async function createNewProject() {
 
   const mode     = document.querySelector('input[name="createAssessMode"]:checked')?.value || 'point';
   const sizeM    = parseInt($('createPlotSizeM').value) || 30;
+  const boxM     = _parsePointBoxSize($('createPointBoxSizeM').value);
   const grid     = $('createSubGrid').value || '5x5';
   const aggRule  = $('createAggRule').value || 'majority';
   const aggPct   = parseFloat($('createAggThreshold').value) / 100 || 0.5;
@@ -280,6 +285,7 @@ export async function createNewProject() {
   const uaSettings = {
     assessmentMode:       mode,
     plotSizeM:            sizeM,
+    pointBoxSizeM:        boxM,
     subPointGrid:         grid,
     aggregationRule:      aggRule,
     aggregationThreshold: aggPct,
@@ -324,6 +330,7 @@ export function openProjectSettings() {
   $('settingsAssessMode').value    = state.assessmentMode;
   _toggleSettingsUAFields(state.assessmentMode);
   $('settingsPlotSizeM').value     = state.plotSizeM;
+  $('settingsPointBoxSizeM').value = state.pointBoxSizeM ?? 30;
   $('settingsSubGrid').value       = state.subPointGrid;
   $('settingsAggRule').value       = state.aggregationRule;
   $('settingsAggThreshold').value  = Math.round(state.aggregationThreshold * 100);
@@ -340,25 +347,41 @@ export function onSettingsAssessModeChange() {
 function _toggleSettingsUAFields(mode) {
   const el = $('settingsUAFields');
   if (el) el.style.display = mode === 'pixel' ? 'block' : 'none';
+  const pt = $('settingsPointFields');
+  if (pt) pt.style.display = mode === 'point' ? 'block' : 'none';
+}
+
+// Clamp point-mode box size to allowed steps {0, 10, 20, 30, 50}.
+function _parsePointBoxSize(v) {
+  const n = parseInt(v, 10);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  const allowed = [10, 20, 30, 50];
+  let best = allowed[0], bestDiff = Infinity;
+  for (const a of allowed) {
+    const d = Math.abs(a - n);
+    if (d < bestDiff) { best = a; bestDiff = d; }
+  }
+  return best;
 }
 
 export async function saveProjectSettings() {
   if (!state.project) return;
   const mode    = $('settingsAssessMode').value;
   const sizeM   = parseInt($('settingsPlotSizeM').value) || 30;
+  const boxM    = _parsePointBoxSize($('settingsPointBoxSizeM').value);
   const grid    = $('settingsSubGrid').value || '5x5';
   const aggRule = $('settingsAggRule').value || 'majority';
   const aggPct  = parseFloat($('settingsAggThreshold').value) / 100 || 0.5;
 
   const uaSettings = {
-    assessmentMode: mode, plotSizeM: sizeM,
+    assessmentMode: mode, plotSizeM: sizeM, pointBoxSizeM: boxM,
     subPointGrid: grid, aggregationRule: aggRule, aggregationThreshold: aggPct,
   };
 
   try {
     await api.saveProjectSettings(state.project.id, uaSettings);
     setState({
-      assessmentMode: mode, plotSizeM: sizeM,
+      assessmentMode: mode, plotSizeM: sizeM, pointBoxSizeM: boxM,
       subPointGrid: grid, aggregationRule: aggRule, aggregationThreshold: aggPct,
     });
     // Patch local project object too

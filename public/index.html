@@ -70,6 +70,21 @@
         </label>
       </div>
 
+      <!-- Point-mode fields (focus-box overlay) -->
+      <div id="createPointFields" style="display:block;padding-top:10px;border-top:1px solid var(--panel-border);">
+        <div style="margin-top:10px;">
+          <label class="field-label">Focus Box Size (meters around point)</label>
+          <select id="createPointBoxSizeM" class="field-input">
+            <option value="0">0 m — no box (point only)</option>
+            <option value="10">10 m</option>
+            <option value="20">20 m</option>
+            <option value="30" selected>30 m</option>
+            <option value="50">50 m</option>
+          </select>
+          <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">Optional dashed square drawn around the point to focus interpretation.</div>
+        </div>
+      </div>
+
       <!-- UA fields (pixel mode only) -->
       <div id="createUAFields" style="display:none;padding-top:10px;border-top:1px solid var(--panel-border);">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;">
@@ -186,6 +201,18 @@
       <option value="point">Point — classify each sample point directly</option>
       <option value="pixel">Pixel / Plot (CEO) — sub-point grid inside UA square</option>
     </select>
+
+    <div id="settingsPointFields" style="display:none;margin-top:14px;padding:12px;background:#0f1117;border-radius:8px;border:1px solid var(--panel-border);">
+      <label class="field-label">Focus Box Size (meters around point)</label>
+      <select id="settingsPointBoxSizeM" class="field-input">
+        <option value="0">0 m — no box (point only)</option>
+        <option value="10">10 m</option>
+        <option value="20">20 m</option>
+        <option value="30">30 m</option>
+        <option value="50">50 m</option>
+      </select>
+      <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">Optional dashed square drawn around the point to focus interpretation.</div>
+    </div>
 
     <div id="settingsUAFields" style="display:none;margin-top:14px;padding:12px;background:#0f1117;border-radius:8px;border:1px solid var(--panel-border);">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
