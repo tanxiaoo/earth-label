@@ -108,6 +108,7 @@ router.post('/json', (req, res) => {
     results: {},
     assessmentMode:       ua.assessmentMode       || 'point',
     plotSizeM:            ua.plotSizeM            || 30,
+    pointBoxSizeM:        ua.pointBoxSizeM        ?? 30,
     subPointGrid:         ua.subPointGrid         || '5x5',
     aggregationRule:      ua.aggregationRule      || 'majority',
     aggregationThreshold: ua.aggregationThreshold || 0.5,
@@ -173,6 +174,7 @@ router.post('/', upload.single('file'), async (req, res) => {
     // UA / Assessment settings
     assessmentMode:       uaSettings.assessmentMode       || 'point',
     plotSizeM:            uaSettings.plotSizeM            || 30,
+    pointBoxSizeM:        uaSettings.pointBoxSizeM        ?? 30,
     subPointGrid:         uaSettings.subPointGrid         || '5x5',
     aggregationRule:      uaSettings.aggregationRule      || 'majority',
     aggregationThreshold: uaSettings.aggregationThreshold || 0.5,
@@ -208,6 +210,7 @@ router.patch('/:id', (req, res) => {
   if (uaSettings) {
     if (uaSettings.assessmentMode       != null) proj.assessmentMode       = uaSettings.assessmentMode;
     if (uaSettings.plotSizeM            != null) proj.plotSizeM            = uaSettings.plotSizeM;
+    if (uaSettings.pointBoxSizeM        != null) proj.pointBoxSizeM        = uaSettings.pointBoxSizeM;
     if (uaSettings.subPointGrid         != null) proj.subPointGrid         = uaSettings.subPointGrid;
     if (uaSettings.aggregationRule      != null) proj.aggregationRule      = uaSettings.aggregationRule;
     if (uaSettings.aggregationThreshold != null) proj.aggregationThreshold = uaSettings.aggregationThreshold;

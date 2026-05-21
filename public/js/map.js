@@ -158,11 +158,27 @@ function _clearPlotLayers() {
   subPointLayersR = [];
 }
 
-// Point mode: simple center dot, no UA square
+// Point mode: center dot plus optional focus-box overlay
 function _renderPointPlot(plot) {
   const dotStyle = { radius:6, color:'#fff', weight:2, fillColor:'#3b82f6', fillOpacity:.9 };
   markerL = L.circleMarker([plot.lat, plot.lon], dotStyle).addTo(mapL);
   markerR = L.circleMarker([plot.lat, plot.lon], dotStyle).addTo(mapR);
+
+  const boxSize = Number(state.pointBoxSizeM) || 0;
+  if (boxSize > 0) {
+    const { dlat, dlon } = metersToDeg(boxSize, plot.lat);
+    const rect = [
+      [plot.lat - dlat, plot.lon - dlon],
+      [plot.lat + dlat, plot.lon + dlon],
+    ];
+    const rectStyle = { color:'#f59e0b', weight:2, fillOpacity:.04, dashArray:'5,5', interactive:false };
+    squareL = L.rectangle(rect, rectStyle).addTo(mapL);
+    squareR = L.rectangle(rect, rectStyle).addTo(mapR);
+
+    const tooltip = L.tooltip({ permanent:true, direction:'bottom', className:'ua-size-tooltip', offset:[0, 4] })
+      .setContent(`${boxSize} m`);
+    squareL.bindTooltip(tooltip).openTooltip();
+  }
 }
 
 // Pixel mode: correctly-sized UA square + sub-point grid
@@ -270,18 +286,11 @@ export function highlightSubPoint(prevIdx, nextIdx) {
     subPointLayersL[prevIdx].setStyle(st);
     subPointLayersR[prevIdx].setStyle(st);
   }
-  // Select next
+  // Select next — keep the map fixed on the whole plot; only restyle the marker
   if (nextIdx != null && subPointLayersL[nextIdx]) {
-    const st = _subPointStyle(nextIdx, plotResults[nextIdx], null);  // pass null cls to force highlight
     const hiStyle = { radius:5, color:'#fff', weight:2, fillColor:'#f59e0b', fillOpacity:1 };
     subPointLayersL[nextIdx].setStyle(hiStyle);
     subPointLayersR[nextIdx].setStyle(hiStyle);
-    // Pan to sub-point
-    const positions = generateSubPointPositions(plot.lat, plot.lon, state.plotSizeM, state.subPointGrid);
-    if (positions[nextIdx]) {
-      const { lat, lon } = positions[nextIdx];
-      mapL.panTo([lat, lon], { animate:true, duration:0.2 });
-    }
   }
 }
 
