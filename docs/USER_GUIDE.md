@@ -185,10 +185,11 @@ All settings are saved with the project and can be edited without losing existin
 2. Sub-point circles fill the UA square: **black dot** = not yet classified; **coloured dot** = classified with that class colour; **orange dot** = currently active.
 3. The right panel header shows **Sub-point X of N** and a row of coloured progress dots.
 4. Click a sub-point circle on the map to select it, or the app auto-selects the next unclassified one.
-5. Press a class keyboard shortcut or click a class button — the sub-point is instantly classified, its circle fills with the class colour, and the next unclassified sub-point is selected automatically.
+5. Press a class keyboard shortcut or click a class button — the selected sub-point is instantly classified, its circle fills with the class colour, and the next sub-point in index order is selected automatically.
 6. Repeat until all sub-points are done. The header switches to **Plot Summary** showing the aggregated class.
-7. Set confidence and fill annotation fields for the plot as a whole.
-8. Click **Submit Plot & Next →** (or **Enter**) to save and advance.
+7. To change an already classified point, click its circle on the map or click its dot in the summary row, then choose the new class. If nothing is selected and you click a class, the app applies it to sub-point 0.
+8. Set confidence and fill annotation fields for the plot as a whole.
+9. Click **Submit Plot & Next →** (or **Enter**) to save and advance.
 
 The **Reference** badge shows the map-product label for this pixel. If your CSV uses `ref_code` / `ref_label` columns they are used directly; columns named `cdl_label_code` / `cdl_label_name` are also recognised as a fallback so USDA CDL sample files work without renaming.
 

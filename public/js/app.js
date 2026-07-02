@@ -681,6 +681,12 @@ function _firstUnclassifiedSubPoint(plotId) {
   return null;
 }
 
+function _nextSubPointIndex(currentIdx) {
+  const total = _subPointTotal();
+  const next = currentIdx + 1;
+  return next < total ? next : null;
+}
+
 function _updateClassifyPanelHeader() {
   const header = $('classifyHeader');
   const subPtInfo = $('subPointInfo');
@@ -697,6 +703,17 @@ function _updateClassifyPanelHeader() {
     subPtInfo.innerHTML = `
       <div class="sp-progress-label">Sub-points: <strong>${done}/${total}</strong></div>
       <div class="sp-dots">${_renderSubPointDots(p?.id, total)}</div>`;
+    subPtInfo.querySelectorAll('.sp-dot').forEach(dot => {
+      const idx = Number(dot.dataset.idx);
+      const select = () => { if (!Number.isNaN(idx)) selectSubPoint(idx); };
+      dot.addEventListener('click', select);
+      dot.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          select();
+        }
+      });
+    });
     header.textContent = done < total
       ? `Sub-point ${(state.selectedSubPointIdx ?? 0) + 1} of ${total}`
       : 'Plot Summary';
@@ -714,7 +731,7 @@ function _renderSubPointDots(plotId, total) {
     const cls = sp ? schema.find(c => String(c.code) === String(sp.code)) : null;
     const color = cls ? cls.color : (sp ? '#888' : '#2a2d3a');
     const border = i === state.selectedSubPointIdx ? '2px solid #f59e0b' : '1px solid #555';
-    return `<span class="sp-dot" style="background:${color};border:${border}" title="Sub-point ${i+1}"></span>`;
+    return `<span class="sp-dot" data-idx="${i}" role="button" tabindex="0" style="background:${color};border:${border}" title="Sub-point ${i+1}"></span>`;
   }).join('');
 }
 
@@ -787,8 +804,7 @@ export function selectSubPoint(idx) {
 function _classifySubPoint(classCode) {
   const p   = state.plots[state.currentIndex];
   if (!p) return;
-  const idx = state.selectedSubPointIdx;
-  if (idx == null) return;
+  const idx = state.selectedSubPointIdx ?? 0;
 
   const schema = state.project?.classSchema || [];
   const cls    = schema.find(c => String(c.code) === String(classCode));
@@ -804,8 +820,8 @@ function _classifySubPoint(classCode) {
   renderClassButtons();
   _updateSubPointProgress(p.id);
 
-  // Advance to next unclassified sub-point
-  const next = _firstUnclassifiedSubPoint(p.id);
+  // Advance in index order so reclassification follows the same next-point flow.
+  const next = _nextSubPointIndex(idx);
   if (next != null) {
     setState({ selectedSubPointIdx: next });
     highlightSubPoint(null, next);

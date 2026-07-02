@@ -360,7 +360,7 @@ body.split-mode .global-basemaps { display:none !important; }
 }
 .sp-dot {
   display:inline-block;width:12px;height:12px;border-radius:2px;
-  transition:background .15s,border .15s;cursor:default;
+  transition:background .15s,border .15s;cursor:pointer;
 }
 
 /* ── UA SIZE TOOLTIP (Leaflet) ───────────────────────────────────────────── */
