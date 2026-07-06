@@ -1,5 +1,6 @@
 import { state, setState } from './state.js';
 import * as api from './api.js';
+import { hasClassDescription } from './class-descriptions.js';
 
 // ── Render class buttons in the right panel ───────────────────────────────
 export function renderClassButtons() {
@@ -16,9 +17,17 @@ export function renderClassButtons() {
     const btn = document.createElement('button');
     btn.className = `class-btn ${state.selectedClass === cls.code ? 'selected' : ''}`;
     btn.onclick = () => window.app.selectClass(cls.code, cls.label);
+    const info = hasClassDescription(cls.label)
+      ? `<span class="class-info" title="What is ${cls.label}?"
+               role="button" tabindex="0"
+               onclick="event.stopPropagation();app.showClassDescription(this.dataset.label)"
+               onkeydown="if(event.key==='Enter'||event.key===' '){event.stopPropagation();event.preventDefault();app.showClassDescription(this.dataset.label)}"
+               data-label="${cls.label.replace(/"/g, '&quot;')}">ⓘ</span>`
+      : '';
     btn.innerHTML = `
       <div class="class-swatch" style="background:${cls.color}"></div>
       <span style="flex:1;text-align:left;">${cls.label}</span>
+      ${info}
       ${cls.key ? `<span class="class-key">${cls.key}</span>` : ''}
     `;
     list.appendChild(btn);

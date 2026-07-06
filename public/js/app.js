@@ -7,6 +7,7 @@ import { initMap, navigateToPlot, setMapLayer, switchBasemap, toggleSplitView,
 import { renderClassButtons, openClassEditor, closeClassEditor, saveClassSchema,
          saveSchemaAsPreset, addEditorClass, applyEditorPreset, exportClassSchema,
          importClassSchema, renderSchemaPreview } from './classes.js';
+import { showClassDescription, closeClassDescription } from './class-descriptions.js';
 import { renderAnnotationInputs, readAnnotationInputs, clearAnnotationInputs,
          openAnnotationFieldsEditor, closeAnnotationFieldsEditor,
          addAnnotationField, saveAnnotationFields } from './annotation-fields.js';
@@ -1073,6 +1074,7 @@ window.app = {
   onSettingsAssessModeChange,
   openClassEditor, closeClassEditor, saveClassSchema, saveSchemaAsPreset,
   addEditorClass, applyEditorPreset, exportClassSchema, importClassSchema,
+  showClassDescription, closeClassDescription,
   openAnnotationFieldsEditor, closeAnnotationFieldsEditor,
   addAnnotationField, saveAnnotationFields,
   exportCSV, exportGeoJSON,

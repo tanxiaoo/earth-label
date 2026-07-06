@@ -289,6 +289,20 @@
   </div>
 </div>
 
+<!-- CLASS DESCRIPTION POPUP -->
+<div id="classDescModal" class="modal-overlay hidden" onclick="if(event.target===this)app.closeClassDescription()">
+  <div class="modal-content" style="max-width:440px;width:90vw;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:12px;">
+      <h3 id="classDescTitle" style="margin:0;"></h3>
+      <button class="icon-btn" style="font-size:18px;" title="Close" onclick="app.closeClassDescription()">✕</button>
+    </div>
+    <p id="classDescBody" style="font-size:13px;line-height:1.6;color:var(--text);margin:0;"></p>
+    <div class="modal-actions" style="margin-top:16px;">
+      <button class="basemap-btn" onclick="app.closeClassDescription()">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- ANNOTATION FIELDS EDITOR -->
 <div id="annotationFieldsEditorModal" class="modal-overlay hidden">
   <div class="modal-content" style="max-width:560px;width:90vw;max-height:90vh;display:flex;flex-direction:column;">
