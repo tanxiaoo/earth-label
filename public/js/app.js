@@ -399,11 +399,12 @@ export async function saveProjectSettings() {
 }
 
 // ── Plot list ─────────────────────────────────────────────────────────────
-function renderPlotList() {
+function renderPlotList({ keepScroll = false } = {}) {
   const schema = state.project?.classSchema || [];
   const list   = $('plotList');
   list.innerHTML = '';
 
+  let activeEl = null;
   state.plots
     .map((p,i) => ({...p, idx:i}))
     .filter(p => {
@@ -411,6 +412,7 @@ function renderPlotList() {
       if (state.currentFilter === 'done')    return  p.completed;
       return true;
     })
+    .sort((a,b) => String(a.id).localeCompare(String(b.id), undefined, { numeric:true }))
     .forEach(p => {
       const showUserLabel = state.currentFilter === 'done' && p.completed;
       const tagCls = showUserLabel
@@ -419,6 +421,7 @@ function renderPlotList() {
       const fallbackLabel = showUserLabel ? p.resultLabel : p.refLabel;
       const div = document.createElement('div');
       div.className = `plot-item ${p.idx===state.currentIndex?'active':''} ${p.completed?'completed':''}`;
+      if (p.idx === state.currentIndex) activeEl = div;
       div.onclick = () => goToPlot(p.idx);
       div.innerHTML = `
         <div class="plot-status ${p.completed?'done':'pending'}"></div>
@@ -431,6 +434,12 @@ function renderPlotList() {
           : (fallbackLabel ? `<span class="plot-molca-badge" style="background:#555;color:#fff">${fallbackLabel}</span>` : '')}`;
       list.appendChild(div);
     });
+
+  // Pin the current plot to the top of the list so it's always visible on
+  // navigation. Skip in "pending" (user just wants what's left) and when a tab
+  // switch asked to keep the remembered scroll position.
+  if (activeEl && !keepScroll && state.currentFilter !== 'pending')
+    list.scrollTop = activeEl.offsetTop - list.offsetTop;
 }
 
 function updateProgress() {
@@ -442,10 +451,22 @@ function updateProgress() {
 }
 
 export function filterPlots(type) {
+  const list = $('plotList');
+  // Remember where the user was in the tab they're leaving.
+  if (list) state.filterScroll[state.currentFilter] = list.scrollTop;
   setState({ currentFilter: type });
   ['all','pending','done'].forEach(t => $(`filter-${t}`)?.classList.toggle('active', t===type));
-  renderPlotList();
+  renderPlotList({ keepScroll: true });
+  // Restore the entered tab's remembered position (top/first-by-ID the first time).
+  if (list) list.scrollTop = state.filterScroll[type] || 0;
 }
+
+export function setRandomNav(on) {
+  setState({ randomNav: !!on });
+  const btn = $('toggle-random-nav');
+  if (btn) { btn.classList.toggle('active', !!on); btn.textContent = on ? 'Random' : 'Sequential'; }
+}
+export function toggleRandomNav() { setRandomNav(!state.randomNav); }
 
 // ── Navigation ────────────────────────────────────────────────────────────
 export function goToPlot(index) {
@@ -503,7 +524,19 @@ export function goToPlot(index) {
 }
 
 export function nextPlot() {
-  const { plots, currentIndex } = state;
+  const { plots, currentIndex, randomNav } = state;
+  if (randomNav) {
+    // Prefer a random unlabeled plot; once everything is labeled, keep jumping
+    // randomly among ALL plots so the user can re-check labels in random order.
+    const pending = [], others = [];
+    for (let i = 0; i < plots.length; i++) {
+      if (i === currentIndex) continue;
+      (plots[i].completed ? others : pending).push(i);
+    }
+    const pool = pending.length ? pending : others;
+    if (pool.length) { goToPlot(pool[Math.floor(Math.random()*pool.length)]); return; }
+    // pool empty (0 or 1 plot total) → fall through to sequential handling
+  }
   for (let i = currentIndex+1; i < plots.length; i++) if (!plots[i].completed) { goToPlot(i); return; }
   for (let i = 0; i < currentIndex; i++)               if (!plots[i].completed) { goToPlot(i); return; }
   if (currentIndex+1 < plots.length) goToPlot(currentIndex+1);
@@ -1060,7 +1093,7 @@ window.app = {
   onCreateAssessModeChange,
   setProjectSort, showProjectListView, deleteCurrentProject,
   importProjectFile, onImportProjectFile, exportProjectFile, loadDemoData,
-  goToPlot, nextPlot, prevPlot, filterPlots,
+  goToPlot, nextPlot, prevPlot, filterPlots, toggleRandomNav, setRandomNav,
   toggleSplitView,
   switchBasemap:       (name)       => { switchBasemap(name);       _updateImageSourceDisplay(); },
   setMapLayer:         (side, name) => { setMapLayer(side, name);   _updateImageSourceDisplay(); },

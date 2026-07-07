@@ -5,6 +5,8 @@ export const state = {
   selectedClass:    null,   // class code (number)
   selectedConfidence: null,
   currentFilter:    'all',
+  filterScroll:     {},      // session-only: remembers plotList scrollTop per filter tab
+  randomNav:        false,   // session-only: nextPlot() picks a random unlabeled plot when true
   projectSort:      'recent',
   isSplitMode:      false,
   leftBasemap:      'google',

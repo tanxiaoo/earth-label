@@ -378,6 +378,9 @@
       <button class="filter-btn active" id="filter-all"     onclick="app.filterPlots('all')">All</button>
       <button class="filter-btn"        id="filter-pending" onclick="app.filterPlots('pending')">Pending</button>
       <button class="filter-btn"        id="filter-done"    onclick="app.filterPlots('done')">Done</button>
+      <button class="filter-btn" id="toggle-random-nav"
+              style="margin-left:auto" title="Next-point order after Submit"
+              onclick="app.toggleRandomNav()">Sequential</button>
     </div>
 
     <div class="plot-list" id="plotList"></div>
