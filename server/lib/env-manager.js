@@ -60,8 +60,14 @@ function _format(env) {
     if (env.SENTINEL_HUB_CLIENT_SECRET) lines.push(`SENTINEL_HUB_CLIENT_SECRET=${env.SENTINEL_HUB_CLIENT_SECRET}`);
     lines.push('');
   }
+  if (env.GEE_PROJECT) {
+    lines.push('# Google Earth Engine project ID (canopy height) — run `earthengine authenticate` once');
+    lines.push(`GEE_PROJECT=${env.GEE_PROJECT}`);
+    lines.push('');
+  }
   const KNOWN = new Set(['PLANET_API_KEY', 'ESRI_API_KEY',
-                          'SENTINEL_HUB_CLIENT_ID', 'SENTINEL_HUB_CLIENT_SECRET']);
+                          'SENTINEL_HUB_CLIENT_ID', 'SENTINEL_HUB_CLIENT_SECRET',
+                          'GEE_PROJECT']);
   for (const [k, v] of Object.entries(env)) {
     if (KNOWN.has(k)) continue;
     lines.push(`${k}=${v}`);

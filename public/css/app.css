@@ -544,6 +544,29 @@ body.split-mode .global-basemaps { display:none !important; }
 .ndvi-status.warn  { color:var(--warning); }
 .ndvi-status.ok    { color:var(--success); }
 
+/* Canopy height readout (ECHOSAT) — sits between the status row and the chart.
+   Colour-coded against the 5 m forest/shrubland threshold. */
+.ndvi-canopy {
+  display:flex;align-items:baseline;gap:8px;
+  font-size:12px;line-height:1.4;
+  padding:5px 9px;margin-bottom:6px;
+  background:#11131b;
+  border:1px solid var(--panel-border);
+  border-radius:6px;
+  flex-shrink:0;
+}
+.ndvi-canopy-label { color:var(--text-dim);flex:0 0 auto; }
+.ndvi-canopy-value { font-weight:600;color:var(--text); }
+.ndvi-canopy-note  { color:var(--text-dim);font-size:11px;font-weight:400; }
+/* Colour is a height cue only (above/below the 5 m line), not a class claim. */
+.ndvi-canopy.above   .ndvi-canopy-value { color:var(--success); }
+.ndvi-canopy.below   .ndvi-canopy-value { color:var(--warning); }
+.ndvi-canopy.nodata  .ndvi-canopy-value,
+.ndvi-canopy.loading .ndvi-canopy-value { color:var(--text-dim);font-weight:400; }
+.ndvi-canopy.error   .ndvi-canopy-value { color:var(--danger);font-weight:400; }
+/* Dataset info ⓘ button sits at the right end of the readout row. */
+.ndvi-canopy .canopy-info { margin-left:auto; flex:0 0 auto; }
+
 .ndvi-chart-wrap {
   position:relative;
   background:#11131b;

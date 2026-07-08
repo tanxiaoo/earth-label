@@ -183,11 +183,11 @@ router.post('/', upload.single('file'), async (req, res) => {
   res.json({ id });
 });
 
-// PATCH /api/projects/:id — incremental update (result, classSchema, annotationFields, ndviCacheUpdate, name, lastUsed)
+// PATCH /api/projects/:id — incremental update (result, classSchema, annotationFields, ndviCacheUpdate, canopyCacheUpdate, name, lastUsed)
 router.patch('/:id', (req, res) => {
   if (!fs.existsSync(projPath(req.params.id))) return res.status(404).json({ error: 'Not found' });
   const proj = readProj(req.params.id);
-  const { plotId, result, classSchema, annotationFields, ndviCacheUpdate, name, lastUsed, uaSettings } = req.body;
+  const { plotId, result, classSchema, annotationFields, ndviCacheUpdate, canopyCacheUpdate, name, lastUsed, uaSettings } = req.body;
 
   if (plotId && result) {
     proj.results = proj.results || {};
@@ -203,6 +203,14 @@ router.patch('/:id', (req, res) => {
     proj.ndviCache[ndviCacheUpdate.plotId] = {
       year: ndviCacheUpdate.year ?? 2025,
       months: ndviCacheUpdate.months,
+      fetchedAt: new Date().toISOString(),
+    };
+  }
+  if (canopyCacheUpdate && canopyCacheUpdate.plotId != null) {
+    proj.canopyCache = proj.canopyCache || {};
+    proj.canopyCache[canopyCacheUpdate.plotId] = {
+      year: canopyCacheUpdate.year ?? 2024,
+      heightM: canopyCacheUpdate.heightM ?? null,
       fetchedAt: new Date().toISOString(),
     };
   }

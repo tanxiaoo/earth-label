@@ -64,6 +64,17 @@ let autoFetchDisabled = false;
 const inFlightKeys = new Set();
 const inFlightKey = (plotId, year) => `${plotId}|${year}`;
 
+// ── Canopy height (ECHOSAT) auto-fetch state ──────────────────────────────
+// ECHOSAT is annual 2018–2024; the panel year select is clamped into that
+// range for canopy. Its fetch de-dupe and auth-error backoff mirror NDVI's
+// but are tracked separately so a canopy failure doesn't disable NDVI fetches.
+const CANOPY_FIRST_YEAR = 2018;
+const CANOPY_LAST_YEAR  = 2024;
+const FOREST_HEIGHT_M   = 5;   // MOLCA: Forest ≥ 5 m, Shrubland < 5 m
+let canopyAutoFetchDisabled = false;
+const canopyInFlight = new Set();
+const canopyYearFor = (y) => Math.max(CANOPY_FIRST_YEAR, Math.min(CANOPY_LAST_YEAR, y));
+
 // label → { ndviRange, seasonalPattern } fallback used when a project's stored
 // classSchema predates the seeded defaults. Built lazily by scanning every
 // built-in preset on first use, so existing projects get sensible suggestions
@@ -664,6 +675,7 @@ export function renderForCurrentPlot() {
     refreshBtn.disabled = true;
     chartWrap?.classList.add('empty');
     destroyChart();
+    paintCanopy(null);
     renderGuideTable();
     return;
   }
@@ -693,12 +705,79 @@ export function renderForCurrentPlot() {
 
   renderGuideTable();
 
+  // ── Canopy height (ECHOSAT) ──
+  const cYear = canopyYearFor(currentYear);
+  const cCache = state.project?.canopyCache?.[plot.id];
+  if (cCache && (cCache.year ?? CANOPY_LAST_YEAR) === cYear) {
+    paintCanopy(cCache);
+  } else {
+    paintCanopy({ loading: true });
+  }
+
   // Auto-fetch when the panel is open and this plot+year has no cache yet.
   // Skipped after a credentials error to avoid spamming on every navigation.
   if (!cacheMatchesYear && !autoFetchDisabled
       && !inFlightKeys.has(inFlightKey(plot.id, currentYear))) {
     doFetch({ forceRefresh: false, auto: true });
   }
+
+  const canopyCached = cCache && (cCache.year ?? CANOPY_LAST_YEAR) === cYear;
+  if (!canopyCached && !canopyAutoFetchDisabled
+      && !canopyInFlight.has(inFlightKey(plot.id, cYear))) {
+    doFetchCanopy({ auto: true });
+  }
+}
+
+// ── Canopy readout render ─────────────────────────────────────────────────
+// States: null (no plot) · {loading} · {heightM:null,...} (no data) ·
+// {heightM:number, year} (value).
+//
+// The readout is EVIDENCE, not a classification. MOLCA distinguishes Forest
+// from Shrubland by three criteria — woody growth form, >50% canopy cover,
+// and the 5 m height cutoff — so height alone can't name a class (e.g. ~2.6 m
+// over the Sahara is Bareland, not Shrubland; tall canopy may be woody wetland
+// or a plantation). We therefore only state where the value sits relative to
+// the fixed 5 m tree-height line, and flag values near it (±1 m) as uncertain,
+// especially given ECHOSAT's ~5 m MAE.
+function paintCanopy(cache) {
+  const box = $('canopyReadout');
+  if (!box) return;
+  const valEl = box.querySelector('.ndvi-canopy-value');
+  if (!valEl) return;
+  box.classList.remove('above', 'below', 'nodata', 'loading', 'error');
+
+  if (cache === null) {
+    box.classList.add('nodata');
+    valEl.textContent = '—';
+    return;
+  }
+  if (cache.error) {
+    box.classList.add('error');
+    // Nudge the user to Settings when GEE isn't configured, rather than a raw error.
+    const msg = String(cache.error || '').toLowerCase();
+    const needsSetup = msg.includes('gee') || msg.includes('earth engine') || msg.includes('authenticate');
+    valEl.textContent = needsSetup ? 'set up GEE in Settings' : 'unavailable';
+    box.title = cache.error;
+    return;
+  }
+  if (cache.loading) {
+    box.classList.add('loading');
+    valEl.textContent = 'loading…';
+    return;
+  }
+  const y = cache.year ?? CANOPY_LAST_YEAR;
+  if (cache.heightM == null) {
+    box.classList.add('nodata');
+    valEl.innerHTML = `no data <span class="ndvi-canopy-note">(${y}, water/no coverage)</span>`;
+    return;
+  }
+  const h = cache.heightM;
+  const above = h >= FOREST_HEIGHT_M;
+  box.classList.add(above ? 'above' : 'below');
+  const near = Math.abs(h - FOREST_HEIGHT_M) <= 1;
+  const side = above ? 'above the 5 m tree-height line' : 'below the 5 m tree-height line';
+  const note = `ECHOSAT ${y} · ${side}${near ? ' · near threshold' : ''}`;
+  valEl.innerHTML = `${h.toFixed(1)} m <span class="ndvi-canopy-note">(${note})</span>`;
 }
 
 function formatRelative(iso) {
@@ -968,7 +1047,73 @@ async function doFetch({ forceRefresh, auto } = {}) {
 }
 
 export function fetchNdvi()   { doFetch({ forceRefresh: false }); }
-export function refreshNdvi() { doFetch({ forceRefresh: true  }); }
+export function refreshNdvi() {
+  doFetch({ forceRefresh: true });
+  // The ↻ button refreshes everything in the panel — re-query canopy too by
+  // clearing this plot's cache entry so doFetchCanopy runs again.
+  const plot = currentPlot();
+  if (plot && state.project?.canopyCache?.[plot.id]) {
+    const { [plot.id]: _drop, ...rest } = state.project.canopyCache;
+    setState({ project: { ...state.project, canopyCache: rest } });
+    canopyAutoFetchDisabled = false;
+    doFetchCanopy({ auto: false });
+  }
+}
+
+// ── Canopy height fetch (ECHOSAT via GEE) ─────────────────────────────────
+// Mirrors doFetch(): de-dupes concurrent (plot, year) fetches, backs off on
+// auth errors, writes state.project.canopyCache, and persists server-side.
+async function doFetchCanopy({ auto } = {}) {
+  const plot = currentPlot();
+  if (!plot || !state.project) return;
+  const fetchPlotId = plot.id;
+  const fetchYear = canopyYearFor(currentYear);
+  const { lat, lon } = plot;
+  const projectId = state.project.id;
+
+  const cached = state.project?.canopyCache?.[fetchPlotId];
+  if (cached && (cached.year ?? CANOPY_LAST_YEAR) === fetchYear) return;
+
+  const key = inFlightKey(fetchPlotId, fetchYear);
+  if (canopyInFlight.has(key)) return;
+  canopyInFlight.add(key);
+
+  const isCurrent = () =>
+    currentPlotId === fetchPlotId && canopyYearFor(currentYear) === fetchYear;
+  if (isCurrent()) paintCanopy({ loading: true });
+
+  let response;
+  try {
+    response = await api.getCanopyHeight(lat, lon, fetchYear);
+  } catch (err) {
+    canopyInFlight.delete(key);
+    const msg = String(err?.message || '').toLowerCase();
+    // GEE not configured / auth problems → stop auto-fetching this session.
+    if (auto && (msg.includes('gee') || msg.includes('earth engine') ||
+                 msg.includes('authenticate') || msg.includes('credentials'))) {
+      canopyAutoFetchDisabled = true;
+    }
+    if (isCurrent()) paintCanopy({ error: err.message || 'Canopy height unavailable.' });
+    return;
+  }
+
+  const heightM = response.heightM ?? null;
+  const year = response.year ?? fetchYear;
+  const next = {
+    ...state.project,
+    canopyCache: {
+      ...(state.project.canopyCache || {}),
+      [fetchPlotId]: { year, heightM, fetchedAt: new Date().toISOString() },
+    },
+  };
+  setState({ project: next });
+  api.saveCanopyCache(projectId, fetchPlotId, year, heightM)
+     .catch((e) => console.warn('Canopy cache persist failed', e));
+
+  canopyAutoFetchDisabled = false;
+  canopyInFlight.delete(key);
+  if (isCurrent()) paintCanopy({ year, heightM });
+}
 
 // ── Chart ─────────────────────────────────────────────────────────────────
 function destroyChart() {

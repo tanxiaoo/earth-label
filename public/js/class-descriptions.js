@@ -40,3 +40,13 @@ export function showClassDescription(label) {
 export function closeClassDescription() {
   document.getElementById('classDescModal').classList.add('hidden');
 }
+
+// ── ECHOSAT canopy-height dataset info modal ──────────────────────────────
+// Content is static in the markup (#canopyInfoModal); these just toggle it.
+export function showCanopyInfo() {
+  document.getElementById('canopyInfoModal').classList.remove('hidden');
+}
+
+export function closeCanopyInfo() {
+  document.getElementById('canopyInfoModal').classList.add('hidden');
+}

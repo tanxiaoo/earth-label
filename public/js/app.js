@@ -7,7 +7,8 @@ import { initMap, navigateToPlot, setMapLayer, switchBasemap, toggleSplitView,
 import { renderClassButtons, openClassEditor, closeClassEditor, saveClassSchema,
          saveSchemaAsPreset, addEditorClass, applyEditorPreset, exportClassSchema,
          importClassSchema, renderSchemaPreview } from './classes.js';
-import { showClassDescription, closeClassDescription } from './class-descriptions.js';
+import { showClassDescription, closeClassDescription,
+         showCanopyInfo, closeCanopyInfo } from './class-descriptions.js';
 import { renderAnnotationInputs, readAnnotationInputs, clearAnnotationInputs,
          openAnnotationFieldsEditor, closeAnnotationFieldsEditor,
          addAnnotationField, saveAnnotationFields } from './annotation-fields.js';
@@ -986,6 +987,16 @@ function refreshKeyBadges() {
     setKeyBadge('planetKeyStatus', s.planet);
     setKeyBadge('shIdStatus',      s.sentinel_hub_id);
     setKeyBadge('shSecretStatus',  s.sentinel_hub_sec);
+    setKeyBadge('geeProjectStatus', s.gee_project);
+    // Earth Engine auth is a credential file, not a saved key — reflect it as
+    // a coloured status line plus a nudge to the copyable command below.
+    const auth = $('geeAuthStatus');
+    if (auth) {
+      auth.textContent = s.gee_authenticated ? 'Authenticated ✓' : 'Not authenticated';
+      auth.style.color = s.gee_authenticated ? 'var(--success)' : 'var(--warning)';
+    }
+    const help = $('geeAuthHelp');
+    if (help) help.style.display = s.gee_authenticated ? 'none' : '';
   });
 }
 
@@ -993,9 +1004,14 @@ export function openSettings() {
   $('planetApiKey').value     = '';
   $('shClientId').value       = '';
   $('shClientSecret').value   = '';
+  $('geeProjectId').value     = '';
   errMsg('settingsMsg', '');
   refreshKeyBadges().catch(()=>{});
   show('settingsModal');
+}
+
+export async function copyGeeAuthCmd() {
+  try { await navigator.clipboard.writeText('earthengine authenticate'); } catch (_) {}
 }
 export function closeSettings() { hide('settingsModal'); }
 
@@ -1003,10 +1019,12 @@ export async function saveSettings() {
   const planet              = $('planetApiKey').value.trim();
   const sentinel_hub_id     = $('shClientId').value.trim();
   const sentinel_hub_secret = $('shClientSecret').value.trim();
+  const gee_project         = $('geeProjectId').value.trim();
   const payload = {};
   if (planet)              payload.planet              = planet;
   if (sentinel_hub_id)     payload.sentinel_hub_id     = sentinel_hub_id;
   if (sentinel_hub_secret) payload.sentinel_hub_secret = sentinel_hub_secret;
+  if (gee_project)         payload.gee_project         = gee_project;
   if (Object.keys(payload).length === 0) {
     errMsg('settingsMsg','Enter at least one credential to save.');
     return;
@@ -1102,12 +1120,13 @@ window.app = {
   updatePlanetParams:  ()           => { updatePlanetParams();      _updateImageSourceDisplay(); },
   selectClass, setConfidence, submitClassification,
   selectSubPoint, computePlotLabel,
-  openSettings, closeSettings, saveSettings, clearKey,
+  openSettings, closeSettings, saveSettings, clearKey, copyGeeAuthCmd,
   openProjectSettings, closeProjectSettings, saveProjectSettings,
   onSettingsAssessModeChange,
   openClassEditor, closeClassEditor, saveClassSchema, saveSchemaAsPreset,
   addEditorClass, applyEditorPreset, exportClassSchema, importClassSchema,
   showClassDescription, closeClassDescription,
+  showCanopyInfo, closeCanopyInfo,
   openAnnotationFieldsEditor, closeAnnotationFieldsEditor,
   addAnnotationField, saveAnnotationFields,
   exportCSV, exportGeoJSON,
