@@ -4,6 +4,15 @@ let mapL, mapR;
 let _onSubPointClick = null;   // registered by app.js
 
 export function registerSubPointClickHandler(fn) { _onSubPointClick = fn; }
+
+// Size suffix for the coord readout: UA square in pixel mode, focus box in
+// point mode. Empty when the point-mode box is off.
+function _boxSizeSuffix() {
+  const m = state.assessmentMode === 'pixel'
+    ? Number(state.plotSizeM) || 0
+    : Number(state.pointBoxSizeM) || 0;
+  return m > 0 ? ` | ${m} m` : '';
+}
 let markerL, squareL, markerR, squareR;
 let layerL, layerR;
 let geomLayer = null;  // polygon/geometry overlay
@@ -77,12 +86,12 @@ export function initMap() {
   mapR.on('move', () => { if (state.isSplitMode && !mapL._isSyncing) _sync(mapR, mapL); });
 
   mapL.on('mousemove', (e) => {
-    document.getElementById('coordInfo').textContent      = `${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)} | z${mapL.getZoom()}`;
-    if (state.isSplitMode) document.getElementById('coordInfoRight').textContent = `${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)} | z${mapR.getZoom()}`;
+    document.getElementById('coordInfo').textContent      = `${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)} | z${mapL.getZoom()}${_boxSizeSuffix()}`;
+    if (state.isSplitMode) document.getElementById('coordInfoRight').textContent = `${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)} | z${mapR.getZoom()}${_boxSizeSuffix()}`;
   });
   mapR.on('mousemove', (e) => {
-    document.getElementById('coordInfoRight').textContent = `${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)} | z${mapR.getZoom()}`;
-    document.getElementById('coordInfo').textContent      = `${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)} | z${mapL.getZoom()}`;
+    document.getElementById('coordInfoRight').textContent = `${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)} | z${mapR.getZoom()}${_boxSizeSuffix()}`;
+    document.getElementById('coordInfo').textContent      = `${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)} | z${mapL.getZoom()}${_boxSizeSuffix()}`;
   });
 }
 
@@ -174,10 +183,6 @@ function _renderPointPlot(plot) {
     const rectStyle = { color:'#f59e0b', weight:2, fillOpacity:.04, dashArray:'5,5', interactive:false };
     squareL = L.rectangle(rect, rectStyle).addTo(mapL);
     squareR = L.rectangle(rect, rectStyle).addTo(mapR);
-
-    const tooltip = L.tooltip({ permanent:true, direction:'bottom', className:'ua-size-tooltip', offset:[0, 4] })
-      .setContent(`${boxSize} m`);
-    squareL.bindTooltip(tooltip).openTooltip();
   }
 }
 
@@ -193,12 +198,6 @@ function _renderPixelPlot(plot) {
   const rectStyle = { color:'#f59e0b', weight:2, fillOpacity:.04, dashArray:'5,5' };
   squareL = L.rectangle(rect, rectStyle).addTo(mapL);
   squareR = L.rectangle(rect, rectStyle).addTo(mapR);
-
-  // UA size label tooltip (like CEO's "20 m" / "30 m" bar)
-  const labelLatLon = [plot.lat - dlat, plot.lon];
-  const tooltip = L.tooltip({ permanent:true, direction:'bottom', className:'ua-size-tooltip', offset:[0, 4] })
-    .setContent(`${state.plotSizeM} m`);
-  squareL.bindTooltip(tooltip).openTooltip();
 
   // Center marker (blue dot)
   const dotStyle = { radius:5, color:'#fff', weight:2, fillColor:'#3b82f6', fillOpacity:.9 };
