@@ -178,6 +178,27 @@
       Required only for the NDVI panel. Create an OAuth client at the Sentinel Hub dashboard.
     </p>
 
+    <label class="field-label" style="margin-top:16px;">Google Earth Engine Project ID
+      <span id="geeProjectStatus" class="key-status"></span>
+    </label>
+    <div style="display:flex;gap:8px;">
+      <input type="password" id="geeProjectId" placeholder="e.g. ee-yourname…" class="field-input" style="flex:1;">
+      <button class="basemap-btn" onclick="app.clearKey('gee_project')" title="Clear GEE Project ID">✕</button>
+    </div>
+    <p style="font-size:11px;color:var(--text-dim);margin-top:8px;line-height:1.5;">
+      Required only for the canopy-height readout. Needs a free
+      <a href="https://code.earthengine.google.com/" target="_blank" rel="noopener" style="color:var(--accent);">Earth Engine</a>
+      account and a registered Cloud project. Authentication status:
+      <span id="geeAuthStatus" style="font-weight:600;">checking…</span>
+    </p>
+    <div id="geeAuthHelp" style="font-size:11px;color:var(--text-dim);margin-top:6px;line-height:1.6;">
+      One-time sign-in — run this once in a terminal, then reload:
+      <span style="display:flex;gap:8px;align-items:center;margin-top:4px;">
+        <code id="geeAuthCmd" style="flex:1;background:#11131b;border:1px solid var(--panel-border);border-radius:5px;padding:5px 8px;font-family:monospace;">earthengine authenticate</code>
+        <button class="basemap-btn" onclick="app.copyGeeAuthCmd()" title="Copy command">Copy</button>
+      </span>
+    </div>
+
     <div id="settingsMsg" class="error-msg hidden" style="margin-top:10px;"></div>
 
     <div class="modal-actions" style="margin-top:16px;">
@@ -299,6 +320,34 @@
     <p id="classDescBody" style="font-size:13px;line-height:1.6;color:var(--text);margin:0;"></p>
     <div class="modal-actions" style="margin-top:16px;">
       <button class="basemap-btn" onclick="app.closeClassDescription()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ECHOSAT canopy-height dataset info -->
+<div id="canopyInfoModal" class="modal-overlay hidden" onclick="if(event.target===this)app.closeCanopyInfo()">
+  <div class="modal-content" style="max-width:460px;width:90vw;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:12px;">
+      <h3 style="margin:0;">ECHOSAT — Tree Canopy Height</h3>
+      <button class="icon-btn" style="font-size:18px;" title="Close" onclick="app.closeCanopyInfo()">✕</button>
+    </div>
+    <div style="font-size:13px;line-height:1.65;color:var(--text);margin:0;">
+      <p style="margin:0 0 10px;">Per-point tree canopy height sampled from the <b>ECHOSAT</b> dataset
+      (Pauls et al., AI4Forest / University of Münster) via Google Earth Engine.</p>
+      <ul style="margin:0 0 10px;padding-left:18px;">
+        <li><b>Resolution:</b> 10 m</li>
+        <li><b>Coverage:</b> global, annual per-year layers <b>2018–2024</b></li>
+        <li><b>Accuracy:</b> ~5 m mean absolute error (MAE)</li>
+        <li><b>Units:</b> metres (converted from the source's centimetres)</li>
+        <li><b>License:</b> CC-BY 4.0</li>
+        <li><b>Source:</b> GEE asset <code>projects/ai4forest/assets/echosat</code></li>
+      </ul>
+      <p style="margin:0;color:var(--text-dim);">Height is <b>one of three</b> MOLCA Forest/Shrubland
+      criteria (also woody growth form and &gt;50% canopy cover). Given the ~5 m MAE, treat values near the
+      5 m line as uncertain — use this as one clue, not a verdict.</p>
+    </div>
+    <div class="modal-actions" style="margin-top:16px;">
+      <button class="basemap-btn" onclick="app.closeCanopyInfo()">Close</button>
     </div>
   </div>
 </div>
@@ -593,6 +642,13 @@
         <div id="ndviStatus" class="ndvi-status">Open a plot to begin.</div>
         <span class="ndvi-guide-hint">Interpretation guide</span>
         <button class="ndvi-guide-toggle" id="ndviGuideToggleBtn" onclick="app.toggleNdviGuide()" title="Show / hide the class reference guide" aria-label="Toggle interpretation guide">▶</button>
+      </div>
+      <div id="canopyReadout" class="ndvi-canopy" title="Tree canopy height from ECHOSAT (Pauls et al., 10 m, 2018–2024, CC-BY 4.0), sampled via Google Earth Engine. 5 m is the MOLCA tree-height cutoff; Forest/Shrubland also require woody growth form and >50% canopy cover — use as one clue, not a verdict.">
+        <span class="ndvi-canopy-label">Canopy height</span>
+        <span class="ndvi-canopy-value">—</span>
+        <span class="class-info canopy-info" role="button" tabindex="0" title="About the ECHOSAT canopy-height dataset"
+              onclick="app.showCanopyInfo()"
+              onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();app.showCanopyInfo()}">ⓘ</span>
       </div>
       <div class="ndvi-chart-wrap">
         <canvas id="ndviChart"></canvas>

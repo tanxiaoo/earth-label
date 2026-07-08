@@ -17,6 +17,7 @@ A self-hosted web app for satellite image interpretation and land-cover validati
 - **Configurable UA size** — UA square side length is set per project (quick buttons: 10 m / 20 m / 30 m / 50 m or any custom value). The square is computed in real metres using a latitude-correct degree conversion so it always matches the target map pixel (e.g. 30 m for Landsat/CDL, 10 m for Sentinel-2).
 - **Configurable annotation fields** — Each project defines its own per-plot annotation columns: rename the default `notes` text field, or add more fields (text or yes/no binary) such as `cloud_cover`, `damage_observed`. Each field becomes its own column in CSV / property in GeoJSON exports.
 - **NDVI time-series panel** — Floating, draggable Sentinel-2 monthly NDVI panel with a per-class interpretation guide. Requires Sentinel Hub credentials (stored in `.env`).
+- **Tree canopy height** — In the same panel, a per-point canopy-height readout from ECHOSAT (10 m, 2018–2024, via Google Earth Engine) shown relative to the MOLCA 5 m tree-height line to aid Forest vs Shrubland calls. Optional; requires a one-time `earthengine authenticate` and a GEE project ID in Settings.
 - **GIS import** — `.csv` · `.geojson` · `.kml` · `.kmz` · Shapefile (`.zip`). Points and Polygons supported; polygon centroids used for navigation, full geometry drawn on the map.
 - **Server-side API key management** — Planet and Sentinel Hub keys stored in `.env` and proxied through the backend; keys never reach the browser. Esri layers are public — no key needed.
 - **Project files on disk** — Each project = one JSON file in `data/projects/`. Portable, version-controllable, easy to share. Export/import any project as a `.json` file.
@@ -65,6 +66,23 @@ The NDVI panel fetches monthly Sentinel-2 NDVI via the **Copernicus Data Space E
 
 Free tier: ~30,000 processing units/month — sufficient for thousands of NDVI fetches per month.
 
+### 5. Enable canopy height (optional, for the tree-height readout)
+
+The NDVI panel also shows a per-point **tree canopy height** from the [ECHOSAT](https://janpauls.org/projects/echosat/) dataset (Pauls et al., 10 m, annual 2018–2024, CC-BY 4.0), sampled via Google Earth Engine. It helps judge Forest vs Shrubland against the MOLCA 5 m tree-height cutoff. Setup is one-time and per-machine:
+
+1. **Install the Earth Engine Python client** (the server shells out to it):
+   ```bash
+   pip install earthengine-api
+   ```
+2. **Authenticate once** — opens a browser sign-in and stores a credential file locally:
+   ```bash
+   earthengine authenticate
+   ```
+   Requires a free [Earth Engine](https://code.earthengine.google.com/) account.
+3. **Set your Cloud project ID** — in EarthLabel: **⚙ Settings** → *Google Earth Engine Project ID* → paste your project (e.g. `ee-yourname`) → **Save**. Written to `.env` as `GEE_PROJECT`; never sent to the browser.
+
+The Settings panel shows a live "Authenticated ✓ / Not authenticated" status and a copyable `earthengine authenticate` command. Until both the project ID and authentication are set, the canopy readout shows a "set up GEE in Settings" hint; everything else in the app works without it.
+
 ---
 
 ## Built-in Classification Schemas
@@ -97,12 +115,15 @@ earth-label/
 │   ├── lib/
 │   │   ├── env-manager.js     ← .env read/write with legacy auto-migration
 │   │   ├── class-presets.js   ← All 10 LULC presets
-│   │   └── gis-parser.js      ← CSV / GeoJSON / KML / Shapefile parser
+│   │   ├── gis-parser.js      ← CSV / GeoJSON / KML / Shapefile parser
+│   │   └── canopy_ee.py       ← ECHOSAT canopy-height sampler (Earth Engine)
 │   └── routes/
 │       ├── keys.js            ← /api/keys/*
 │       ├── presets.js         ← /api/presets/*
 │       ├── projects.js        ← /api/projects/*  (CRUD, file upload, import/export)
 │       ├── tiles.js           ← /api/tiles/*    (Planet/ESRI proxy)
+│       ├── ndvi.js            ← /api/ndvi/*     (Sentinel Hub NDVI)
+│       ├── canopy.js          ← /api/canopy/*   (ECHOSAT canopy height via GEE)
 │       └── kml.js             ← /kml/*          (Google Earth Pro sync)
 ├── public/                    ← Static assets served by Express
 │   ├── index.html
@@ -218,8 +239,8 @@ For polygon features the centroid is used for map navigation; the full geometry 
 
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
-| `GET`    | `/api/keys/status`              | Returns `{planet: bool, esri: bool}` |
-| `POST`   | `/api/keys`                     | Save Planet/ESRI keys to `.env` |
+| `GET`    | `/api/keys/status`              | Returns which credentials are set (`planet`, `esri`, `sentinel_hub_*`, `gee_project`, `gee_authenticated`) — booleans only, never values |
+| `POST`   | `/api/keys`                     | Save Planet / ESRI / Sentinel Hub / GEE project to `.env` |
 | `DELETE` | `/api/keys`                     | Clear key(s) |
 | `GET`    | `/api/presets`                  | List preset summaries (built-in + user) |
 | `GET`    | `/api/presets/:id`              | Full preset with class list |
@@ -237,6 +258,8 @@ For polygon features the centroid is used for map navigation; the full geometry 
 | `GET`    | `/api/tiles/planet/:period/:z/:x/:y` | Planet tile proxy |
 | `GET`    | `/api/tiles/esri-wayback/:release/:z/:y/:x` | ESRI Wayback tile proxy |
 | `GET`    | `/api/tiles/esri-world/:z/:y/:x`   | ESRI World Imagery tile proxy |
+| `POST`   | `/api/ndvi/monthly`             | Monthly Sentinel-2 NDVI for a point (Sentinel Hub) |
+| `POST`   | `/api/canopy/point`             | ECHOSAT canopy height (m) for a point (Earth Engine) |
 | `POST`   | `/kml/update`                   | Update Google Earth Pro KML target |
 | `GET`    | `/kml/current.kml`              | KML for Google Earth Pro NetworkLink |
 
@@ -290,6 +313,7 @@ For access to historical imagery with the time slider:
 - [EOX](https://s2maps.eu/) for Sentinel-2 cloudless mosaics
 - [Planet Labs](https://www.planet.com/) for PlanetScope imagery
 - [ESRI / Esri Wayback](https://livingatlas.arcgis.com/wayback/) for World Imagery archives
+- [ECHOSAT](https://janpauls.org/projects/echosat/) (Pauls et al., AI4Forest / Uni Münster) for global canopy height, CC-BY 4.0
 - [Leaflet](https://leafletjs.com/) for the mapping library
 - Class-schema sources cited in [docs/SCHEMAS.md](docs/SCHEMAS.md)
 - Inspired by [Collect Earth Online](https://collect.earth/) by FAO / SERVIR

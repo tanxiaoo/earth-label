@@ -15,6 +15,7 @@ app.use('/api/presets', require('./routes/presets'));
 app.use('/api/projects', require('./routes/projects'));
 app.use('/api/tiles', require('./routes/tiles'));
 app.use('/api/ndvi', require('./routes/ndvi'));
+app.use('/api/canopy', require('./routes/canopy'));
 app.use('/kml', require('./routes/kml'));
 
 const PORT = process.env.PORT || 3000;

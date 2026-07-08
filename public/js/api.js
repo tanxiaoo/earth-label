@@ -80,3 +80,14 @@ export const saveNdviCache = (projectId, plotId, year, months) =>
     ndviCacheUpdate: { plotId, year, months },
     lastUsed: new Date().toISOString(),
   });
+
+// Canopy height — ECHOSAT (10 m, 2018–2024) point value via Google Earth Engine
+export const getCanopyHeight = (lat, lon, year = 2024) =>
+  fetch('/api/canopy/point', { method:'POST', headers:{'Content-Type':'application/json'},
+                                body: JSON.stringify({ lat, lon, year }) }).then(_json);
+
+export const saveCanopyCache = (projectId, plotId, year, heightM) =>
+  updateProject(projectId, {
+    canopyCacheUpdate: { plotId, year, heightM },
+    lastUsed: new Date().toISOString(),
+  });
