@@ -7,6 +7,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- **Grid / Cells assessment mode** (`assessmentMode: "grid"`): a third per-project mode alongside Point and Pixel. The UA square (the target pixel footprint, e.g. 10 m for Sentinel-2) is divided into a configurable cell grid (2×2 / 3×3 / 4×4 / 5×5, default 3×3) and each **cell** is classified by its dominant cover — instead of labelling single sub-points that can sit on the pixel boundary. Cells aggregate to a plot-level class with the existing majority/threshold rule. (`public/js/state.js`, `public/js/map.js`, `public/js/app.js`, `public/index.html`, `server/routes/projects.js`)
+- **Grid mode — optional inner box (buffer)** (`gridInnerSizeM`, default 0 = full pixel): cells tile the full UA square by default so the class percentages correspond exactly to the pixel area; optionally the cell grid can be drawn inside a smaller centered box (e.g. 9 m inside a 10 m pixel) to keep a buffer from the pixel edges against imagery/raster misalignment. (`public/js/map.js`, `public/js/app.js`, `public/index.html`)
+- **Grid mode — cell map interaction**: cells render as clickable rectangles on both map panes (white grid lines = unclassified, translucent class colour = classified, orange = selected); classification auto-advances cell-by-cell exactly like sub-points, with the same progress dots, keyboard shortcuts and plot summary. (`public/js/map.js`, `public/js/app.js`)
+- **Grid mode — export with density %**: CSV adds `cell_grid`, `cell_coverage_m`, `cells_json`, per-cell columns `cell_0`…`cell_N-1`, `cell_total`, `cell_dominant_count`, `cell_dominant_pct` and `cell_class_pct_json` — the per-class cover percentage (0–100%) of the pixel, e.g. impervious density for validation. GeoJSON carries the same properties (breakdown embedded as `cell_class_pct`). (`public/js/export.js`)
+- **Grid mode — GEP KML sync**: in grid mode `/kml/current.kml` renders one semi-transparent colour-coded polygon per cell (orange outline = selected) inside the UA square, mirroring the web UI. (`server/routes/kml.js`, `public/js/app.js`)
+- **Per-result assessment metadata**: every submitted result now stores the mode and grid geometry it was assessed with (`assessmentMode`, `uaSizeM`, `subPointGrid` / `cellGrid` + `cellCoverageM`), so exports stay truthful after settings changes. (`public/js/app.js`)
+- **Mixed-mode exports**: CSV/GeoJSON now emit `assessment_mode` per row (from the stored result) and include both the pixel and grid column blocks when a project contains results from both modes — each row filled from its own stored data instead of the current project setting. Per-unit column counts cover the largest stored result so no classified unit is dropped. (`public/js/export.js`)
+
+### Fixed
+- Changing the assessment mode or grid geometry mid-project no longer lets stale in-progress sub-point/cell labels be submitted under the new geometry (out-of-range indices, wrong density denominators): unsubmitted unit labels are reset on geometry changes, stored unit labels are restored for display/re-classification only when the result's stored geometry matches the current settings, and the header count, submit gate and aggregation all consider only units of the current geometry — eliminating both the enabled-but-dead Submit button and the reverse case where a completed plot from a larger old geometry could be silently resubmitted as the new one. (`public/js/app.js`, `public/index.html`)
+- Exports of a project created by re-importing a previous export no longer let the stale imported columns (carried in plot meta) shadow the freshly computed values: computed properties win in GeoJSON, and colliding meta columns are dropped from CSV. Per-unit `sp_N`/`cell_N` column counts now derive from the highest stored unit index, so sparse legacy results keep all their units. (`public/js/export.js`)
+- User text (class labels, plot ids) is now XML-escaped in the GEP KML sync — a `&` or `<` in a class label previously made Google Earth Pro reject the whole live overlay. (`server/routes/kml.js`)
+
 ---
 
 ## [2.2.0] - 2026-05-18

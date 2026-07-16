@@ -13,7 +13,7 @@ A self-hosted web app for satellite image interpretation and land-cover validati
 - **Multi-source basemaps** — Google Satellite, ESRI World Imagery (latest + Wayback year-end snapshots 2018–2025, no API key required), Bing, Sentinel-2 cloudless (2018–2024), Planet PlanetScope (monthly mosaics 2016–2026)
 - **Dual map / split view** — Compare two basemaps side-by-side with synced pan/zoom
 - **Dynamic classification schemas** — 10 built-in real-world LULC presets (MOLCA, CORINE, IGBP/MODIS, ESA CCI, NLCD, IPCC, Anderson/USGS, FROM-GLC, Binary, Custom). Each project carries its own schema; edit, add, delete classes with color picker and keyboard shortcuts. Save any edited schema as a reusable user preset.
-- **Two assessment modes (per project)** — **Point mode**: classify each sample point directly with one click — ideal for vector point datasets. **Pixel/Plot mode** (Collect Earth Online–compatible): each entry is a pixel/map centre; a correctly-sized Unit of Assessment (UA) square is drawn on the map, a configurable sub-point grid (3×3 or 5×5) is placed inside it, each sub-point is classified individually, and a majority or threshold rule aggregates the sub-point labels to a single plot-level class.
+- **Three assessment modes (per project)** — **Point mode**: classify each sample point directly with one click — ideal for vector point datasets. **Pixel/Plot mode** (Collect Earth Online–compatible): each entry is a pixel/map centre; a correctly-sized Unit of Assessment (UA) square is drawn on the map, a configurable sub-point grid (3×3 or 5×5) is placed inside it, each sub-point is classified individually, and a majority or threshold rule aggregates the sub-point labels to a single plot-level class. **Grid/Cells mode**: the UA square is divided into a cell grid (2×2 / 3×3 / 4×4 / 5×5) and each **cell** is labelled by its dominant cover — because cells are areas rather than boundary-sitting points, labels stay stable under small imagery/raster misalignment, and the per-class cell fractions give a clean 0–100% density (e.g. impervious %) per pixel. Optionally the cells can tile a smaller inner box (e.g. 9 m inside a 10 m pixel) to keep a buffer from the pixel edges.
 - **Configurable UA size** — UA square side length is set per project (quick buttons: 10 m / 20 m / 30 m / 50 m or any custom value). The square is computed in real metres using a latitude-correct degree conversion so it always matches the target map pixel (e.g. 30 m for Landsat/CDL, 10 m for Sentinel-2).
 - **Configurable annotation fields** — Each project defines its own per-plot annotation columns: rename the default `notes` text field, or add more fields (text or yes/no binary) such as `cloud_cover`, `damage_observed`. Each field becomes its own column in CSV / property in GeoJSON exports.
 - **NDVI time-series panel** — Floating, draggable Sentinel-2 monthly NDVI panel with a per-class interpretation guide. Requires Sentinel Hub credentials (stored in `.env`).
@@ -24,8 +24,8 @@ A self-hosted web app for satellite image interpretation and land-cover validati
 - **Auto-save** — Every classification result persists immediately via incremental PATCH to the backend.
 - **Image source logging** — On every submit, the active basemap and selected year/date are automatically recorded (`image_source`, `image_date`). A live indicator above the Submit button shows what will be saved (e.g. `Planet · 2024-06`). Use the **📡 GEP** toggle to mark Google Earth Pro as the reference and enter the year from GEP's time slider.
 - **Per-point time tracking** — A MM:SS live timer starts on each plot navigation. Pause/Resume (⏸/▶) stops the clock during interruptions. `time_spent_s` is saved with every result and exported — useful for estimating total annotation time at scale and flagging difficult plots.
-- **Multiple export formats** — CSV (flat results) and GeoJSON (with original geometry preserved). Point-mode exports include only core result columns. Pixel-mode exports additionally include `ua_size_m`, `sub_point_grid`, per-sub-point class columns (`sp_0`…`sp_N-1`), `sub_point_total`, `sub_point_dominant_count`, `sub_point_agreement_pct`, and `sub_points_json`. Re-classifying a plot updates the next export immediately. In pixel mode, you can click a sub-point on the map or one of the summary dots below the counter, then choose a class to overwrite that sub-point. If no sub-point is selected, a class click applies to sub-point 0 and the app advances to the next index.
-- **Google Earth integration** — One-shot **Google Earth Web** button opens the current plot in a new tab. Live **Google Earth Pro** sync via NetworkLink (`/kml/current.kml`) flies the camera to each plot on submit. In pixel mode, the KML includes the UA square polygon and colour-coded sub-point placemarks. Toolbar slider (50–5000 m) controls camera distance, persisted across sessions.
+- **Multiple export formats** — CSV (flat results) and GeoJSON (with original geometry preserved). Point-mode exports include only core result columns. Pixel-mode exports additionally include `ua_size_m`, `sub_point_grid`, per-sub-point class columns (`sp_0`…`sp_N-1`), `sub_point_total`, `sub_point_dominant_count`, `sub_point_agreement_pct`, and `sub_points_json`. Grid-mode exports include `cell_grid`, `cell_coverage_m`, per-cell columns (`cell_0`…`cell_N-1`), `cell_total`, `cell_dominant_count`, `cell_dominant_pct`, `cell_class_pct_json` (per-class density %), and `cells_json`. Re-classifying a plot updates the next export immediately. In pixel/grid mode, you can click a sub-point/cell on the map or one of the summary dots below the counter, then choose a class to overwrite it. If nothing is selected, a class click applies to index 0 and the app advances to the next index.
+- **Google Earth integration** — One-shot **Google Earth Web** button opens the current plot in a new tab. Live **Google Earth Pro** sync via NetworkLink (`/kml/current.kml`) flies the camera to each plot on submit. In pixel mode, the KML includes the UA square polygon and colour-coded sub-point placemarks; in grid mode, colour-coded semi-transparent cell polygons. Toolbar slider (50–5000 m) controls camera distance, persisted across sessions.
 - **Keyboard shortcuts** — Rapid classification with per-class hotkeys, confidence levels (`h`/`m`/`l`), `Enter` or `Space` to submit, arrow keys to navigate.
 
 ---
@@ -197,25 +197,41 @@ sub_point_total, sub_point_dominant_count, sub_point_agreement_pct,
 sp_0, sp_1, … sp_N-1
 ```
 
+**Grid mode** adds after `assessment_mode`:
+
+```
+ua_size_m, cell_grid, cell_coverage_m, cells_json,
+cell_total, cell_dominant_count, cell_dominant_pct, cell_class_pct_json,
+cell_0, cell_1, … cell_N-1
+```
+
 | Column | Description |
 |--------|-------------|
 | `image_source` | Basemap used when classifying (e.g. `Planet`, `ESRI Wayback`, `Google Earth Pro`) |
 | `image_date` | Year or year-month of the image (e.g. `2024-06`, `2022`) — blank for Google/Bing current |
 | `time_spent_s` | Seconds spent classifying this plot (pause time excluded) |
-| `assessment_mode` | `point` or `pixel` |
-| `ua_size_m` | UA square side in metres *(pixel mode only)* |
+| `assessment_mode` | `point`, `pixel` or `grid` |
+| `ua_size_m` | UA square side in metres *(pixel/grid mode)* |
 | `sub_point_grid` | Grid config e.g. `3x3` *(pixel mode only)* |
 | `sub_points_json` | Raw JSON array `[{idx,code,label},…]` *(pixel mode only)* |
 | `sub_point_total` | Number of classified sub-points *(pixel mode only)* |
 | `sub_point_dominant_count` | Sub-points matching the winning class *(pixel mode only)* |
 | `sub_point_agreement_pct` | Agreement % for the winning class e.g. `77.8` *(pixel mode only)* |
 | `sp_0` … `sp_N-1` | Class label for each grid position *(pixel mode only; 9 cols for 3×3, 25 for 5×5)* |
+| `cell_grid` | Cell grid config e.g. `3x3` *(grid mode only)* |
+| `cell_coverage_m` | Side of the box the cells tile — equals `ua_size_m` unless an inner box is set *(grid mode only)* |
+| `cells_json` | Raw JSON array `[{idx,code,label},…]` *(grid mode only)* |
+| `cell_total` | Number of classified cells *(grid mode only)* |
+| `cell_dominant_count` | Cells matching the winning class *(grid mode only)* |
+| `cell_dominant_pct` | Cover % of the winning class e.g. `66.7` *(grid mode only)* |
+| `cell_class_pct_json` | Per-class density breakdown, e.g. `[{"code":13,"label":"Built-up","pct":66.7},…]` *(grid mode only)* |
+| `cell_0` … `cell_N-1` | Class label for each cell, row-major from top-left *(grid mode only)* |
 
 The columns after the UA block come from the project's **annotation fields** — by default a single text field named `notes`. Any unrecognised columns from the original upload are appended at the end, so the export is a strict superset of the input. A UTF-8 BOM is prepended so Excel renders non-ASCII names correctly.
 
 ### Output (GeoJSON download)
 
-Each feature carries the canonical snake-case properties (`plot_id, lat, lon, ref_code, ref_label, class_code, class_label, confidence, image_source, image_date, time_spent_s, assessment_mode, project_name, saved_at`), plus `ua_size_m`, `sub_point_grid`, `sub_points`, `sub_point_total`, `sub_point_dominant_count`, `sub_point_agreement_pct` in pixel mode, one property per annotation field, and any extra columns from the original upload.
+Each feature carries the canonical snake-case properties (`plot_id, lat, lon, ref_code, ref_label, class_code, class_label, confidence, image_source, image_date, time_spent_s, assessment_mode, project_name, saved_at`), plus `ua_size_m`, `sub_point_grid`, `sub_points`, `sub_point_total`, `sub_point_dominant_count`, `sub_point_agreement_pct` in pixel mode, or `ua_size_m`, `cell_grid`, `cell_coverage_m`, `cells`, `cell_total`, `cell_dominant_count`, `cell_dominant_pct`, `cell_class_pct` in grid mode, one property per annotation field, and any extra columns from the original upload.
 
 ---
 
