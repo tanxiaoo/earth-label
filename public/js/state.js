@@ -19,15 +19,18 @@ export const state = {
   // ── Assessment / UA settings (loaded from project, persisted server-side) ──
   // assessmentMode: "point" → classify each plot entry directly (no UA square)
   //                 "pixel" → CEO methodology: UA square + sub-point grid
+  //                 "grid"  → UA square divided into cells, each cell classified
   assessmentMode:       'point',
-  plotSizeM:            30,      // UA square side length in meters (pixel mode)
+  plotSizeM:            30,      // UA square side length in meters (pixel/grid mode)
   pointBoxSizeM:        30,      // Optional square overlay side length in meters (point mode); 0 = off
   subPointGrid:         '5x5',   // "3x3" (9 pts) | "5x5" (25 pts)
+  cellGrid:             '3x3',   // grid mode: "2x2" | "3x3" | "4x4" | "5x5" cells
+  gridInnerSizeM:       0,       // grid mode: cells cover this inner box (m); 0 = full UA square
   aggregationRule:      'majority', // "majority" | "threshold"
   aggregationThreshold: 0.5,     // fraction needed to win (threshold rule)
 
-  // ── Sub-point tracking (pixel mode, ephemeral — not persisted) ──
-  selectedSubPointIdx:  null,    // idx of the currently active sub-point
+  // ── Sub-point / cell tracking (pixel & grid modes, ephemeral — not persisted) ──
+  selectedSubPointIdx:  null,    // idx of the currently active sub-point / cell
   subPointResults:      {},      // {plotId: {idx: {code, label}}}
 
   // ── Google Earth Pro source tracking ──────────────────────────────────────

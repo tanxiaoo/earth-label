@@ -2,7 +2,7 @@ import { state, setState } from './state.js';
 import * as api from './api.js';
 import { initMap, navigateToPlot, setMapLayer, switchBasemap, toggleSplitView,
          updateEsriYear, updateSentinel2Year, updatePlanetParams,
-         highlightSubPoint, refreshSubPoint,
+         highlightSubPoint, refreshSubPoint, gridCoverSizeM,
          registerSubPointClickHandler } from './map.js';
 import { renderClassButtons, openClassEditor, closeClassEditor, saveClassSchema,
          saveSchemaAsPreset, addEditorClass, applyEditorPreset, exportClassSchema,
@@ -166,19 +166,14 @@ async function loadProject(id) {
     plotSizeM:            proj.plotSizeM            || 30,
     pointBoxSizeM:        proj.pointBoxSizeM ?? 30,
     subPointGrid:         proj.subPointGrid         || '5x5',
+    cellGrid:             proj.cellGrid             || '3x3',
+    gridInnerSizeM:       proj.gridInnerSizeM       ?? 0,
     aggregationRule:      proj.aggregationRule      || 'majority',
     aggregationThreshold: proj.aggregationThreshold || 0.5,
   });
 
-  // Restore sub-point results from saved data
-  const spResults = {};
-  Object.entries(proj.results || {}).forEach(([plotId, r]) => {
-    if (r.subPoints && Array.isArray(r.subPoints)) {
-      spResults[plotId] = {};
-      r.subPoints.forEach(sp => { spResults[plotId][sp.idx] = { code: sp.code, label: sp.label }; });
-    }
-  });
-  setState({ subPointResults: spResults });
+  // Restore sub-point (pixel mode) / cell (grid mode) results from saved data
+  setState({ subPointResults: _rebuildUnitResults() });
 
   localStorage.setItem('lastProjectId', id);
   $('activeProjectName').textContent = proj.name;
@@ -209,11 +204,14 @@ function _updateUABadge() {
   if (!el) return;
   if (state.assessmentMode === 'pixel') {
     el.textContent = `Pixel ${state.plotSizeM}m · ${state.subPointGrid}`;
-    el.style.display = 'inline-block';
+  } else if (state.assessmentMode === 'grid') {
+    const inner = Number(state.gridInnerSizeM) || 0;
+    const core  = (inner > 0 && inner < state.plotSizeM) ? ` · ${inner}m core` : '';
+    el.textContent = `Grid ${state.plotSizeM}m · ${state.cellGrid} cells${core}`;
   } else {
     el.textContent = 'Point';
-    el.style.display = 'inline-block';
   }
+  el.style.display = 'inline-block';
 }
 
 // ── Create project modal ──────────────────────────────────────────────────
@@ -239,6 +237,8 @@ export function openCreateProjectModal() {
   $('createPlotSizeM').value   = '30';
   $('createPointBoxSizeM').value = '30';
   $('createSubGrid').value     = '5x5';
+  $('createCellGrid').value    = '3x3';
+  $('createGridInnerSizeM').value = '0';
   $('createAggRule').value     = 'majority';
   $('createAggThreshold').value = '50';
   show('createProjectModal');
@@ -255,10 +255,25 @@ export function onCreateAssessModeChange() {
 }
 
 function _toggleCreateUAFields(mode) {
-  const el = $('createUAFields');
-  if (el) el.style.display = mode === 'pixel' ? 'block' : 'none';
-  const pt = $('createPointFields');
+  _toggleUAFieldContainers(mode, 'createUAFields', 'createPointFields',
+                           'createSubGridWrap', 'createCellGridWrap', 'createGridInnerWrap');
+}
+
+// Shared show/hide logic for the create + settings modals. The UA container
+// serves both pixel and grid modes; inside it the sub-point grid selector is
+// pixel-only and the cell grid / inner-size fields are grid-only.
+function _toggleUAFieldContainers(mode, uaId, pointId, subGridId, cellGridId, innerId) {
+  const isMulti = mode === 'pixel' || mode === 'grid';
+  const ua = $(uaId);
+  if (ua) ua.style.display = isMulti ? 'block' : 'none';
+  const pt = $(pointId);
   if (pt) pt.style.display = mode === 'point' ? 'block' : 'none';
+  const sp = $(subGridId);
+  if (sp) sp.style.display = mode === 'pixel' ? 'block' : 'none';
+  const cg = $(cellGridId);
+  if (cg) cg.style.display = mode === 'grid' ? 'block' : 'none';
+  const gi = $(innerId);
+  if (gi) gi.style.display = mode === 'grid' ? 'block' : 'none';
 }
 
 export async function onPresetChange() {
@@ -281,6 +296,8 @@ export async function createNewProject() {
   const sizeM    = parseInt($('createPlotSizeM').value) || 30;
   const boxM     = _parsePointBoxSize($('createPointBoxSizeM').value);
   const grid     = $('createSubGrid').value || '5x5';
+  const cellGrid = $('createCellGrid').value || '3x3';
+  const innerM   = _parseGridInnerSize($('createGridInnerSizeM').value, sizeM);
   const aggRule  = $('createAggRule').value || 'majority';
   const aggPct   = parseFloat($('createAggThreshold').value) / 100 || 0.5;
 
@@ -289,6 +306,8 @@ export async function createNewProject() {
     plotSizeM:            sizeM,
     pointBoxSizeM:        boxM,
     subPointGrid:         grid,
+    cellGrid:             cellGrid,
+    gridInnerSizeM:       innerM,
     aggregationRule:      aggRule,
     aggregationThreshold: aggPct,
   };
@@ -334,6 +353,8 @@ export function openProjectSettings() {
   $('settingsPlotSizeM').value     = state.plotSizeM;
   $('settingsPointBoxSizeM').value = state.pointBoxSizeM ?? 30;
   $('settingsSubGrid').value       = state.subPointGrid;
+  $('settingsCellGrid').value      = state.cellGrid || '3x3';
+  $('settingsGridInnerSizeM').value = state.gridInnerSizeM ?? 0;
   $('settingsAggRule').value       = state.aggregationRule;
   $('settingsAggThreshold').value  = Math.round(state.aggregationThreshold * 100);
   errMsg('projectSettingsMsg', '');
@@ -347,10 +368,8 @@ export function onSettingsAssessModeChange() {
 }
 
 function _toggleSettingsUAFields(mode) {
-  const el = $('settingsUAFields');
-  if (el) el.style.display = mode === 'pixel' ? 'block' : 'none';
-  const pt = $('settingsPointFields');
-  if (pt) pt.style.display = mode === 'point' ? 'block' : 'none';
+  _toggleUAFieldContainers(mode, 'settingsUAFields', 'settingsPointFields',
+                           'settingsSubGridWrap', 'settingsCellGridWrap', 'settingsGridInnerWrap');
 }
 
 // Clamp point-mode box size to allowed steps {0, 10, 20, 30, 50}.
@@ -366,28 +385,52 @@ function _parsePointBoxSize(v) {
   return best;
 }
 
+// Grid-mode inner box size: 0 = cells cover the full UA square. Anything
+// non-positive, non-numeric, or >= the UA size collapses to 0 (full pixel).
+function _parseGridInnerSize(v, plotSizeM) {
+  const n = parseFloat(v);
+  if (!Number.isFinite(n) || n <= 0 || n >= plotSizeM) return 0;
+  return n;
+}
+
 export async function saveProjectSettings() {
   if (!state.project) return;
-  const mode    = $('settingsAssessMode').value;
-  const sizeM   = parseInt($('settingsPlotSizeM').value) || 30;
-  const boxM    = _parsePointBoxSize($('settingsPointBoxSizeM').value);
-  const grid    = $('settingsSubGrid').value || '5x5';
-  const aggRule = $('settingsAggRule').value || 'majority';
-  const aggPct  = parseFloat($('settingsAggThreshold').value) / 100 || 0.5;
+  const mode     = $('settingsAssessMode').value;
+  const sizeM    = parseInt($('settingsPlotSizeM').value) || 30;
+  const boxM     = _parsePointBoxSize($('settingsPointBoxSizeM').value);
+  const grid     = $('settingsSubGrid').value || '5x5';
+  const cellGrid = $('settingsCellGrid').value || '3x3';
+  const innerM   = _parseGridInnerSize($('settingsGridInnerSizeM').value, sizeM);
+  const aggRule  = $('settingsAggRule').value || 'majority';
+  const aggPct   = parseFloat($('settingsAggThreshold').value) / 100 || 0.5;
 
   const uaSettings = {
     assessmentMode: mode, plotSizeM: sizeM, pointBoxSizeM: boxM,
-    subPointGrid: grid, aggregationRule: aggRule, aggregationThreshold: aggPct,
+    subPointGrid: grid, cellGrid, gridInnerSizeM: innerM,
+    aggregationRule: aggRule, aggregationThreshold: aggPct,
   };
+
+  // A change of mode or grid geometry invalidates in-progress (unsubmitted)
+  // sub-point/cell labels — they were made against a different layout.
+  const geometryChanged =
+    mode     !== state.assessmentMode ||
+    sizeM    !== state.plotSizeM      ||
+    grid     !== state.subPointGrid   ||
+    cellGrid !== state.cellGrid       ||
+    innerM   !== state.gridInnerSizeM;
 
   try {
     await api.saveProjectSettings(state.project.id, uaSettings);
     setState({
       assessmentMode: mode, plotSizeM: sizeM, pointBoxSizeM: boxM,
-      subPointGrid: grid, aggregationRule: aggRule, aggregationThreshold: aggPct,
+      subPointGrid: grid, cellGrid, gridInnerSizeM: innerM,
+      aggregationRule: aggRule, aggregationThreshold: aggPct,
     });
     // Patch local project object too
     Object.assign(state.project, uaSettings);
+    if (geometryChanged) {
+      setState({ subPointResults: _rebuildUnitResults(), selectedSubPointIdx: null });
+    }
     _updateUABadge();
     closeProjectSettings();
     // Re-render current plot with new settings
@@ -395,6 +438,7 @@ export async function saveProjectSettings() {
       setState({ selectedSubPointIdx: null });
       navigateToPlot(state.plots[state.currentIndex]);
       _updateClassifyPanelHeader();
+      updateSubmitBtn();
     }
   } catch (e) { errMsg('projectSettingsMsg', e.message); }
 }
@@ -509,15 +553,14 @@ export function goToPlot(index) {
 
   if (state.ndviPanelOpen) renderNdviForCurrentPlot();
 
-  // In pixel mode: auto-select the first unclassified sub-point
-  if (state.assessmentMode === 'pixel') {
-    const totalPts = _subPointTotal();
-    const spRes    = state.subPointResults[p.id] || {};
+  // In pixel/grid mode: auto-select the first unclassified sub-point / cell
+  if (_isMultiUnit()) {
     const firstUnclassified = _firstUnclassifiedSubPoint(p.id);
     if (firstUnclassified != null) {
       setState({ selectedSubPointIdx: firstUnclassified });
       highlightSubPoint(null, firstUnclassified);
-    } else if (Object.keys(spRes).length === totalPts) {
+    } else {
+      // null ⇒ every unit of the current geometry is classified
       _showSubPointSummary(p.id);
     }
     _updateSubPointProgress(p.id);
@@ -672,19 +715,27 @@ export function toggleTimerPause() {
 }
 
 // Builds the pixelMode payload for /kml/update from current state.
+// Pixel mode sends subPointGrid; grid mode sends cellGrid (+ inner size) so
+// the KML route can draw cell polygons instead of sub-point placemarks.
 function _buildPixelModeForKml(plotId) {
-  if (state.assessmentMode !== 'pixel') return null;
+  if (!_isMultiUnit()) return null;
   const spRes  = state.subPointResults[plotId] || {};
   const schema = state.project?.classSchema || [];
-  return {
+  const payload = {
     plotSizeM:       state.plotSizeM,
-    subPointGrid:    state.subPointGrid,
     selectedIdx:     state.selectedSubPointIdx,
     subPointResults: Object.entries(spRes).map(([idx, v]) => {
       const cls = schema.find(c => String(c.code) === String(v.code));
       return { idx: Number(idx), code: v.code, label: v.label, color: cls?.color || '#888888' };
     }),
   };
+  if (state.assessmentMode === 'grid') {
+    payload.cellGrid       = state.cellGrid;
+    payload.gridInnerSizeM = state.gridInnerSizeM;
+  } else {
+    payload.subPointGrid   = state.subPointGrid;
+  }
+  return payload;
 }
 
 function _syncKml(p) {
@@ -701,10 +752,69 @@ export function onGeRangeInput(value) {
   api.updateKMLRange(v);
 }
 
-// ── Sub-point helpers ─────────────────────────────────────────────────────
+// ── Sub-point / cell helpers ──────────────────────────────────────────────
+// Pixel and grid mode share the whole per-unit classification flow: cells are
+// tracked in state.subPointResults keyed by the same row-major idx.
+function _isMultiUnit() {
+  return state.assessmentMode === 'pixel' || state.assessmentMode === 'grid';
+}
+
+function _unitNoun() {
+  return state.assessmentMode === 'grid' ? 'cell' : 'sub-point';
+}
+
 function _subPointTotal() {
+  if (state.assessmentMode === 'grid') {
+    const n = parseInt(state.cellGrid) || 3;
+    return n * n;
+  }
   const n = parseInt(state.subPointGrid) || 5;
   return n * n;
+}
+
+// Count of classified units belonging to the CURRENT grid geometry. Entries
+// with idx >= the current total (left over from an earlier mode / grid
+// setting) are ignored everywhere — header, submit gate, aggregation — so
+// the three always agree.
+function _unitDone(plotId) {
+  const total = _subPointTotal();
+  const spRes = state.subPointResults[plotId] || {};
+  return Object.keys(spRes).filter(idx => Number(idx) < total).length;
+}
+
+// A stored result's units are only meaningful under the geometry they were
+// assessed with. They are restored for display / re-classification ONLY when
+// that geometry matches the current settings — otherwise labels made at
+// different positions would masquerade as valid units of the new layout and
+// could be resubmitted as such.
+function _unitsMatchCurrentGeometry(r) {
+  const isGrid = state.assessmentMode === 'grid';
+  const units  = isGrid ? r.cells : r.subPoints;   // cross-mode data never matches
+  if (!Array.isArray(units)) return false;
+  if (r.uaSizeM != null && Number(r.uaSizeM) !== Number(state.plotSizeM)) return false;
+  const storedGrid = isGrid ? r.cellGrid : r.subPointGrid;
+  if (storedGrid != null) {
+    if (storedGrid !== (isGrid ? state.cellGrid : state.subPointGrid)) return false;
+    if (isGrid && r.cellCoverageM != null && Number(r.cellCoverageM) !== gridCoverSizeM()) return false;
+    return true;
+  }
+  // Legacy result without stored geometry: best effort — match by unit count
+  return units.length === _subPointTotal();
+}
+
+// Rebuild the per-unit results map from the project's stored results
+// (subPoints in pixel mode, cells in grid mode). Used on project load and
+// after grid-geometry settings changes, where unsubmitted in-progress unit
+// labels would otherwise go stale against the new geometry.
+function _rebuildUnitResults() {
+  const res = {};
+  Object.entries(state.project?.results || {}).forEach(([plotId, r]) => {
+    if (!_unitsMatchCurrentGeometry(r)) return;
+    const units = state.assessmentMode === 'grid' ? r.cells : r.subPoints;
+    res[plotId] = {};
+    units.forEach(u => { res[plotId][u.idx] = { code: u.code, label: u.label }; });
+  });
+  return res;
 }
 
 function _firstUnclassifiedSubPoint(plotId) {
@@ -727,17 +837,16 @@ function _updateClassifyPanelHeader() {
   const subPtInfo = $('subPointInfo');
   if (!header || !subPtInfo) return;
 
-  if (state.assessmentMode === 'pixel') {
-    const p    = state.plots[state.currentIndex];
-    const done = p ? Object.keys(state.subPointResults[p.id] || {}).length : 0;
-    // For completed plots use the stored sub-point count as the authoritative total
-    // so a grid-setting change after submission doesn't show "25/9".
-    const storedTotal = state.project?.results?.[p?.id]?.subPoints?.length;
-    const total = storedTotal ?? _subPointTotal();
+  if (_isMultiUnit()) {
+    const p     = state.plots[state.currentIndex];
+    const total = _subPointTotal();
+    const done  = p ? _unitDone(p.id) : 0;
+    const noun  = _unitNoun();
+    const nounCap = noun.charAt(0).toUpperCase() + noun.slice(1);
     subPtInfo.style.display = 'block';
     subPtInfo.innerHTML = `
-      <div class="sp-progress-label">Sub-points: <strong>${done}/${total}</strong></div>
-      <div class="sp-dots">${_renderSubPointDots(p?.id, total)}</div>`;
+      <div class="sp-progress-label">${nounCap}s: <strong>${done}/${total}</strong></div>
+      <div class="sp-dots">${_renderSubPointDots(p?.id, total, nounCap)}</div>`;
     subPtInfo.querySelectorAll('.sp-dot').forEach(dot => {
       const idx = Number(dot.dataset.idx);
       const select = () => { if (!Number.isNaN(idx)) selectSubPoint(idx); };
@@ -750,7 +859,7 @@ function _updateClassifyPanelHeader() {
       });
     });
     header.textContent = done < total
-      ? `Sub-point ${(state.selectedSubPointIdx ?? 0) + 1} of ${total}`
+      ? `${nounCap} ${(state.selectedSubPointIdx ?? 0) + 1} of ${total}`
       : 'Plot Summary';
   } else {
     header.textContent = 'Classify This Plot';
@@ -758,7 +867,7 @@ function _updateClassifyPanelHeader() {
   }
 }
 
-function _renderSubPointDots(plotId, total) {
+function _renderSubPointDots(plotId, total, nounCap = 'Sub-point') {
   const spRes = state.subPointResults[plotId] || {};
   const schema = state.project?.classSchema || [];
   return Array.from({ length: total }, (_, i) => {
@@ -766,7 +875,7 @@ function _renderSubPointDots(plotId, total) {
     const cls = sp ? schema.find(c => String(c.code) === String(sp.code)) : null;
     const color = cls ? cls.color : (sp ? '#888' : '#2a2d3a');
     const border = i === state.selectedSubPointIdx ? '2px solid #f59e0b' : '1px solid #555';
-    return `<span class="sp-dot" data-idx="${i}" role="button" tabindex="0" style="background:${color};border:${border}" title="Sub-point ${i+1}"></span>`;
+    return `<span class="sp-dot" data-idx="${i}" role="button" tabindex="0" style="background:${color};border:${border}" title="${nounCap} ${i+1}"></span>`;
   }).join('');
 }
 
@@ -787,17 +896,22 @@ function _showSubPointSummary(plotId) {
   updateSubmitBtn();
 }
 
-// Compute the plot-level LULC class from its sub-point results
+// Compute the plot-level LULC class from its sub-point / cell results.
+// Only units of the current grid geometry (idx < total) are aggregated.
 export function computePlotLabel(plotId) {
-  const spRes  = state.subPointResults[plotId] || {};
+  const spRes    = state.subPointResults[plotId] || {};
+  const maxUnits = _subPointTotal();
+  const units    = Object.entries(spRes)
+    .filter(([idx]) => Number(idx) < maxUnits)
+    .map(([, v]) => v);
   const counts = {};
-  Object.values(spRes).forEach(({ code, label }) => {
+  units.forEach(({ code, label }) => {
     const k = String(code);
     counts[k] = counts[k] || { code, label, n: 0 };
     counts[k].n++;
   });
 
-  const total = Object.values(spRes).length;
+  const total = units.length;
   if (!total) return null;
 
   if (state.aggregationRule === 'threshold') {
@@ -815,7 +929,7 @@ export function computePlotLabel(plotId) {
 // ── Classification — Point Mode ───────────────────────────────────────────
 export function selectClass(code) {
   _autoResumeTimer();
-  if (state.assessmentMode === 'pixel') {
+  if (_isMultiUnit()) {
     _classifySubPoint(code);
     return;
   }
@@ -824,8 +938,8 @@ export function selectClass(code) {
   updateSubmitBtn();
 }
 
-// ── Classification — Pixel Mode (sub-points) ──────────────────────────────
-// Called when user clicks a sub-point circle on the map
+// ── Classification — Pixel / Grid Mode (sub-points / cells) ───────────────
+// Called when user clicks a sub-point circle or cell rectangle on the map
 export function selectSubPoint(idx) {
   const prev = state.selectedSubPointIdx;
   setState({ selectedSubPointIdx: idx });
@@ -881,14 +995,13 @@ function updateConfidenceUI() {
 
 function updateSubmitBtn() {
   const btn = $('submitBtn');
-  if (state.assessmentMode === 'pixel') {
-    const p           = state.plots[state.currentIndex];
-    const done        = p ? Object.keys(state.subPointResults[p.id] || {}).length : 0;
-    const storedTotal = state.project?.results?.[p?.id]?.subPoints?.length;
-    const total       = storedTotal ?? _subPointTotal();
+  if (_isMultiUnit()) {
+    const p     = state.plots[state.currentIndex];
+    const total = _subPointTotal();
+    const done  = p ? _unitDone(p.id) : 0;
     btn.disabled = done < total;
     btn.textContent = done < total
-      ? `${total - done} sub-points remaining`
+      ? `${total - done} ${_unitNoun()}s remaining`
       : 'Submit Plot & Next →';
   } else {
     btn.disabled    = !state.selectedClass;
@@ -899,7 +1012,7 @@ function updateSubmitBtn() {
 export async function submitClassification() {
   if (!state.project) return;
 
-  if (state.assessmentMode === 'pixel') {
+  if (_isMultiUnit()) {
     await _submitPixelPlot();
   } else {
     await _submitPointPlot();
@@ -923,6 +1036,7 @@ async function _submitPointPlot() {
     imageSource,
     imageDate,
     timeSpentSeconds,
+    assessmentMode: 'point',
   };
 
   const plots = [...state.plots];
@@ -947,7 +1061,12 @@ async function _submitPixelPlot() {
 
   const total = _subPointTotal();
   const spRes = state.subPointResults[plotId] || {};
-  if (Object.keys(spRes).length < total) return;
+  // Only units of the current grid geometry are submitted; entries left over
+  // from an earlier mode / grid setting are ignored, never persisted.
+  const units = Object.entries(spRes)
+    .filter(([idx]) => Number(idx) < total)
+    .map(([idx, v]) => ({ idx: Number(idx), ...v }));
+  if (units.length < total) return;
 
   const agg    = computePlotLabel(plotId);
   if (!agg) return;
@@ -963,7 +1082,15 @@ async function _submitPixelPlot() {
     imageSource,
     imageDate,
     timeSpentSeconds,
-    subPoints:   Object.entries(spRes).map(([idx, v]) => ({ idx: Number(idx), ...v })),
+    // The assessment geometry is stored with the result so exports stay
+    // truthful even if the project's settings change later. Grid mode stores
+    // its per-unit labels under `cells` so exports and reloads can tell the
+    // two multi-unit modes apart.
+    assessmentMode: state.assessmentMode,
+    uaSizeM:        state.plotSizeM,
+    ...(state.assessmentMode === 'grid'
+      ? { cellGrid: state.cellGrid, cellCoverageM: gridCoverSizeM(), cells: units }
+      : { subPointGrid: state.subPointGrid, subPoints: units }),
   };
 
   const plots = [...state.plots];
