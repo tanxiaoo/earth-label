@@ -96,7 +96,7 @@
               <button class="basemap-btn" style="font-size:11px;padding:3px 8px;" onclick="document.getElementById('createPlotSizeM').value=30">30 m</button>
               <button class="basemap-btn" style="font-size:11px;padding:3px 8px;" onclick="document.getElementById('createPlotSizeM').value=50">50 m</button>
             </div>
-            <input type="number" id="createPlotSizeM" value="30" min="1" max="500" class="field-input" placeholder="e.g. 30">
+            <input type="number" id="createPlotSizeM" value="30" min="1" max="500" step="any" class="field-input" placeholder="e.g. 30 or 6.667">
           </div>
           <div>
             <label class="field-label">Sub-point Grid</label>
@@ -245,7 +245,7 @@
             <button class="basemap-btn" style="font-size:11px;padding:3px 8px;" onclick="document.getElementById('settingsPlotSizeM').value=30">30 m</button>
             <button class="basemap-btn" style="font-size:11px;padding:3px 8px;" onclick="document.getElementById('settingsPlotSizeM').value=50">50 m</button>
           </div>
-          <input type="number" id="settingsPlotSizeM" value="30" min="1" max="500" class="field-input">
+          <input type="number" id="settingsPlotSizeM" value="30" min="1" max="500" step="any" class="field-input">
         </div>
         <div>
           <label class="field-label">Sub-point Grid</label>
