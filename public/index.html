@@ -101,10 +101,12 @@
           <div>
             <label class="field-label">Sub-point Grid</label>
             <select id="createSubGrid" class="field-input">
+              <option value="2x2">2×2 (4 points)</option>
               <option value="3x3">3×3 (9 points)</option>
+              <option value="4x4">4×4 (16 points)</option>
               <option value="5x5" selected>5×5 (25 points)</option>
             </select>
-            <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">Points placed inside UA square</div>
+            <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">Points placed at the center of each grid cell</div>
           </div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;">
@@ -250,7 +252,9 @@
         <div>
           <label class="field-label">Sub-point Grid</label>
           <select id="settingsSubGrid" class="field-input">
+            <option value="2x2">2×2 (4 points)</option>
             <option value="3x3">3×3 (9 points)</option>
+            <option value="4x4">4×4 (16 points)</option>
             <option value="5x5" selected>5×5 (25 points)</option>
           </select>
         </div>

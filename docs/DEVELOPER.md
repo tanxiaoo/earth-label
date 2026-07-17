@@ -89,7 +89,7 @@ export const state = {
   // ── Assessment / UA (per project, persisted server-side) ─────────────────
   assessmentMode:       'point',    // 'point' | 'pixel'
   plotSizeM:            30,         // UA square side in metres (pixel mode)
-  subPointGrid:         '5x5',      // '3x3' | '5x5'
+  subPointGrid:         '5x5',      // '2x2' | '3x3' | '4x4' | '5x5' (N×N, points at cell centres)
   aggregationRule:      'majority', // 'majority' | 'threshold'
   aggregationThreshold: 0.5,        // fraction (threshold rule only)
 
@@ -153,7 +153,7 @@ A project file in `data/projects/<id>.json`:
   // ── UA / Assessment settings (v2.1) ──────────────────────────────────────
   "assessmentMode":       "pixel",    // "point" | "pixel"
   "plotSizeM":            30,         // UA square side in metres
-  "subPointGrid":         "5x5",      // "3x3" | "5x5"
+  "subPointGrid":         "5x5",      // "2x2" | "3x3" | "4x4" | "5x5"
   "aggregationRule":      "majority", // "majority" | "threshold"
   "aggregationThreshold": 0.5,        // fraction (threshold rule only)
 

@@ -112,7 +112,7 @@ Choose how each plot entry will be classified. This is set at project creation a
 | Setting | Options | Description |
 |---------|---------|-------------|
 | **UA Size** | 10 m / 20 m / 30 m / 50 m / custom | Side length of the UA square in metres. Use 10 m for Sentinel-2, 30 m for Landsat / CDL. |
-| **Sub-point Grid** | 3×3 (9 pts) · 5×5 (25 pts) | Number of sample points placed uniformly inside the UA square. |
+| **Sub-point Grid** | 2×2 (4 pts) · 3×3 (9 pts) · 4×4 (16 pts) · 5×5 (25 pts) | The UA square is divided into N×N equal cells and one sample point is placed at the centre of each cell (never on the square's edge). |
 | **Aggregation Rule** | Majority · Threshold % | How sub-point labels are combined into one plot label. *Majority*: the class with the most points wins. *Threshold*: a class must reach the set percentage to win, otherwise majority is used. |
 
 All settings are saved with the project and can be edited without losing existing results via **⚙ UA** in the sidebar.
@@ -181,8 +181,8 @@ All settings are saved with the project and can be edited without losing existin
 
 ### Pixel / Plot Mode (CEO)
 
-1. Navigate to a plot — the dashed orange square (the **UA**) appears on the map, sized exactly to the configured pixel footprint. A small label (e.g. `30 m`) shows below the square.
-2. Sub-point circles fill the UA square: **black dot** = not yet classified; **coloured dot** = classified with that class colour; **orange dot** = currently active.
+1. Navigate to a plot — the dashed orange square (the **UA**) appears on the map with faint dashed N×N subdivision lines inside it, sized exactly to the configured pixel footprint. A small label (e.g. `30 m`) shows below the square. The map auto-zooms so the square is a consistent, clickable size regardless of latitude or UA size.
+2. Sub-point circles sit at the centre of each grid cell: **black dot** = not yet classified; **coloured dot** = classified with that class colour; **orange dot** = currently active.
 3. The right panel header shows **Sub-point X of N** and a row of coloured progress dots.
 4. Click a sub-point circle on the map to select it, or the app auto-selects the next unclassified one.
 5. Press a class keyboard shortcut or click a class button — the selected sub-point is instantly classified, its circle fills with the class colour, and the next sub-point in index order is selected automatically.

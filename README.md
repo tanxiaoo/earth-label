@@ -13,8 +13,8 @@ A self-hosted web app for satellite image interpretation and land-cover validati
 - **Multi-source basemaps** — Google Satellite, ESRI World Imagery (latest + Wayback year-end snapshots 2018–2025, no API key required), Bing, Sentinel-2 cloudless (2018–2024), Planet PlanetScope (monthly mosaics 2016–2026)
 - **Dual map / split view** — Compare two basemaps side-by-side with synced pan/zoom
 - **Dynamic classification schemas** — 10 built-in real-world LULC presets (MOLCA, CORINE, IGBP/MODIS, ESA CCI, NLCD, IPCC, Anderson/USGS, FROM-GLC, Binary, Custom). Each project carries its own schema; edit, add, delete classes with color picker and keyboard shortcuts. Save any edited schema as a reusable user preset.
-- **Two assessment modes (per project)** — **Point mode**: classify each sample point directly with one click — ideal for vector point datasets. **Pixel/Plot mode** (Collect Earth Online–compatible): each entry is a pixel/map centre; a correctly-sized Unit of Assessment (UA) square is drawn on the map, a configurable sub-point grid (3×3 or 5×5) is placed inside it, each sub-point is classified individually, and a majority or threshold rule aggregates the sub-point labels to a single plot-level class.
-- **Configurable UA size** — UA square side length is set per project (quick buttons: 10 m / 20 m / 30 m / 50 m or any custom value). The square is computed in real metres using a latitude-correct degree conversion so it always matches the target map pixel (e.g. 30 m for Landsat/CDL, 10 m for Sentinel-2).
+- **Two assessment modes (per project)** — **Point mode**: classify each sample point directly with one click — ideal for vector point datasets. **Pixel/Plot mode** (Collect Earth Online–compatible): each entry is a pixel/map centre; a correctly-sized Unit of Assessment (UA) square is drawn on the map, a configurable sub-point grid (2×2, 3×3, 4×4 or 5×5) is placed inside it — each grid divides the UA square into N×N equal cells with one sub-point at the **centre of each cell** — each sub-point is classified individually, and a majority or threshold rule aggregates the sub-point labels to a single plot-level class.
+- **Configurable UA size** — UA square side length is set per project (quick buttons: 10 m / 20 m / 30 m / 50 m or any custom value). The square is computed in real metres using a latitude-correct degree conversion so it always matches the target map pixel (e.g. 30 m for Landsat/CDL, 10 m for Sentinel-2). In pixel mode each plot loads at an **adaptive zoom** that renders the UA square at a consistent on-screen size, so small squares and high-latitude plots stay equally clickable regardless of latitude or UA size.
 - **Configurable annotation fields** — Each project defines its own per-plot annotation columns: rename the default `notes` text field, or add more fields (text or yes/no binary) such as `cloud_cover`, `damage_observed`. Each field becomes its own column in CSV / property in GeoJSON exports.
 - **NDVI time-series panel** — Floating, draggable Sentinel-2 monthly NDVI panel with a per-class interpretation guide. Requires Sentinel Hub credentials (stored in `.env`).
 - **Tree canopy height** — In the same panel, a per-point canopy-height readout from ECHOSAT (10 m, 2018–2024, via Google Earth Engine) shown relative to the MOLCA 5 m tree-height line to aid Forest vs Shrubland calls. Optional; requires a one-time `earthengine authenticate` and a GEE project ID in Settings.
@@ -25,7 +25,7 @@ A self-hosted web app for satellite image interpretation and land-cover validati
 - **Image source logging** — On every submit, the active basemap and selected year/date are automatically recorded (`image_source`, `image_date`). A live indicator above the Submit button shows what will be saved (e.g. `Planet · 2024-06`). Use the **📡 GEP** toggle to mark Google Earth Pro as the reference and enter the year from GEP's time slider.
 - **Per-point time tracking** — A MM:SS live timer starts on each plot navigation. Pause/Resume (⏸/▶) stops the clock during interruptions. `time_spent_s` is saved with every result and exported — useful for estimating total annotation time at scale and flagging difficult plots.
 - **Multiple export formats** — CSV (flat results) and GeoJSON (with original geometry preserved). Point-mode exports include only core result columns. Pixel-mode exports additionally include `ua_size_m`, `sub_point_grid`, per-sub-point class columns (`sp_0`…`sp_N-1`), `sub_point_total`, `sub_point_dominant_count`, `sub_point_agreement_pct`, and `sub_points_json`. Re-classifying a plot updates the next export immediately. In pixel mode, you can click a sub-point on the map or one of the summary dots below the counter, then choose a class to overwrite that sub-point. If no sub-point is selected, a class click applies to sub-point 0 and the app advances to the next index.
-- **Google Earth integration** — One-shot **Google Earth Web** button opens the current plot in a new tab. Live **Google Earth Pro** sync via NetworkLink (`/kml/current.kml`) flies the camera to each plot on submit. In pixel mode, the KML includes the UA square polygon and colour-coded sub-point placemarks. Toolbar slider (50–5000 m) controls camera distance, persisted across sessions.
+- **Google Earth integration** — One-shot **Google Earth Web** button opens the current plot in a new tab. Live **Google Earth Pro** sync via NetworkLink (`/kml/current.kml`) flies the camera to each plot on submit. In pixel mode, the KML includes the UA square polygon, its N×N subdivision grid lines, and colour-coded sub-point placemarks. Toolbar slider (50–5000 m) controls camera distance, persisted across sessions.
 - **Keyboard shortcuts** — Rapid classification with per-class hotkeys, confidence levels (`h`/`m`/`l`), `Enter` or `Space` to submit, arrow keys to navigate.
 
 ---
@@ -83,6 +83,14 @@ The NDVI panel also shows a per-point **tree canopy height** from the [ECHOSAT](
 
 The Settings panel shows a live "Authenticated ✓ / Not authenticated" status and a copyable `earthengine authenticate` command. Until both the project ID and authentication are set, the canopy readout shows a "set up GEE in Settings" hint; everything else in the app works without it.
 
+### 6. Run the tests (optional)
+
+```bash
+npm test
+```
+
+Uses the built-in Node test runner (no extra dependencies). Includes a coordinate round-trip guard asserting that lat/lon parsed from an uploaded CSV survive to export with no precision loss.
+
 ---
 
 ## Built-in Classification Schemas
@@ -137,6 +145,7 @@ earth-label/
 │       ├── annotation-fields.js ← Per-project annotation inputs + editor
 │       ├── ndvi-panel.js      ← Floating NDVI time-series panel
 │       └── export.js          ← CSV / GeoJSON / project export
+├── test/                     ← Node test-runner specs (npm test)
 └── data/                      ← Local data (gitignored)
     ├── projects/              ← Project JSON files
     └── user_presets.json      ← Schemas saved as reusable presets
@@ -209,7 +218,7 @@ sp_0, sp_1, … sp_N-1
 | `sub_point_total` | Number of classified sub-points *(pixel mode only)* |
 | `sub_point_dominant_count` | Sub-points matching the winning class *(pixel mode only)* |
 | `sub_point_agreement_pct` | Agreement % for the winning class e.g. `77.8` *(pixel mode only)* |
-| `sp_0` … `sp_N-1` | Class label for each grid position *(pixel mode only; 9 cols for 3×3, 25 for 5×5)* |
+| `sp_0` … `sp_N-1` | Class label for each grid position *(pixel mode only; 4 cols for 2×2, 9 for 3×3, 16 for 4×4, 25 for 5×5)* |
 
 The columns after the UA block come from the project's **annotation fields** — by default a single text field named `notes`. Any unrecognised columns from the original upload are appended at the end, so the export is a strict superset of the input. A UTF-8 BOM is prepended so Excel renders non-ASCII names correctly.
 

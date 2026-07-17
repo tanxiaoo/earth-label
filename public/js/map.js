@@ -14,6 +14,7 @@ function _boxSizeSuffix() {
   return m > 0 ? ` | ${m} m` : '';
 }
 let markerL, squareL, markerR, squareR;
+let gridLinesL, gridLinesR;   // N×N subdivision guide lines (pixel mode)
 let layerL, layerR;
 let geomLayer = null;  // polygon/geometry overlay
 
@@ -112,15 +113,16 @@ function metersToDeg(sizeM, lat) {
 }
 
 // Generate the {lat, lon, idx} positions for the sub-point grid inside the UA square.
-// gridStr: "3x3" | "5x5"  →  rows×cols evenly spanning the full UA square
+// gridStr: "2x2" | "3x3" | ...  →  divide the UA square into n×n equal cells and
+// place one point at the center of each cell (never on the square's edge).
 function generateSubPointPositions(centerLat, centerLon, sizeM, gridStr) {
   const n    = parseInt(gridStr) || 5; // "5x5" → 5
   const { dlat, dlon } = metersToDeg(sizeM, centerLat);
   const positions = [];
   for (let r = 0; r < n; r++) {
     for (let c = 0; c < n; c++) {
-      const fR  = n > 1 ? r / (n - 1) : 0.5;
-      const fC  = n > 1 ? c / (n - 1) : 0.5;
+      const fR  = (r + 0.5) / n;  // cell center: 1/2n … (2n-1)/2n
+      const fC  = (c + 0.5) / n;
       positions.push({
         lat: centerLat + dlat * (1 - 2 * fR),   // top → bottom
         lon: centerLon + dlon * (-1 + 2 * fC),  // left → right
@@ -131,11 +133,45 @@ function generateSubPointPositions(centerLat, centerLon, sizeM, gridStr) {
   return positions;
 }
 
+// Build the n−1 interior subdivision lines of the UA square as a feature group.
+// dlat/dlon are the square's half-side in degrees (from metersToDeg).
+function _buildGridLines(centerLat, centerLon, dlat, dlon) {
+  const n = parseInt(state.subPointGrid) || 5;
+  const lineStyle = { color:'#f59e0b', weight:1, opacity:.4, dashArray:'3,4', interactive:false };
+  const top = centerLat + dlat, bot = centerLat - dlat;
+  const left = centerLon - dlon, right = centerLon + dlon;
+  const lines = [];
+  for (let i = 1; i < n; i++) {
+    const f = i / n;
+    const lat = top - 2 * dlat * f;   // horizontal line
+    const lon = left + 2 * dlon * f;  // vertical line
+    lines.push(L.polyline([[lat, left], [lat, right]], lineStyle));
+    lines.push(L.polyline([[top, lon], [bot, lon]], lineStyle));
+  }
+  return L.featureGroup(lines);
+}
+
+// Zoom that renders the UA square at ~targetPx on screen. Because Web Mercator
+// resolution scales with cos(lat), a fixed zoom makes small/low-latitude squares
+// tiny and large/high-latitude squares huge; this keeps the square clickable
+// regardless of latitude and UA size. Clamped by the caller to the map max zoom.
+function _zoomForPlot(map, plot) {
+  if (state.assessmentMode !== 'pixel') return 19;
+  const uaM = Number(state.plotSizeM) || 30;
+  const targetPx = 220;
+  const mpp = uaM / targetPx;                       // desired meters per pixel
+  const z = Math.log2(156543.03392 * Math.cos(plot.lat * Math.PI / 180) / mpp);
+  const maxZ = map.getMaxZoom?.() ?? 21;
+  return Math.max(3, Math.min(maxZ, Math.round(z)));
+}
+
 // ── Navigate to plot ──────────────────────────────────────────────────────
 export function navigateToPlot(plot) {
-  const zoom = state.isFirstPlotLoad ? 19 : mapL.getZoom();
+  // Split maps stay zoom-synced, so compute one target zoom (from the left map)
+  // and apply it to both.
+  const zoom = state.isFirstPlotLoad ? _zoomForPlot(mapL, plot) : mapL.getZoom();
   mapL.setView([plot.lat, plot.lon], zoom);
-  if (state.isSplitMode) mapR.setView([plot.lat, plot.lon], state.isFirstPlotLoad ? 19 : mapR.getZoom(), { animate:false });
+  if (state.isSplitMode) mapR.setView([plot.lat, plot.lon], state.isFirstPlotLoad ? zoom : mapR.getZoom(), { animate:false });
 
   // Remove previous layers
   _clearPlotLayers();
@@ -156,10 +192,12 @@ export function navigateToPlot(plot) {
 }
 
 function _clearPlotLayers() {
-  if (markerL)  { mapL.removeLayer(markerL);  markerL  = null; }
-  if (squareL)  { mapL.removeLayer(squareL);  squareL  = null; }
-  if (markerR)  { mapR.removeLayer(markerR);  markerR  = null; }
-  if (squareR)  { mapR.removeLayer(squareR);  squareR  = null; }
+  if (markerL)    { mapL.removeLayer(markerL);    markerL    = null; }
+  if (squareL)    { mapL.removeLayer(squareL);    squareL    = null; }
+  if (markerR)    { mapR.removeLayer(markerR);    markerR    = null; }
+  if (squareR)    { mapR.removeLayer(squareR);    squareR    = null; }
+  if (gridLinesL) { mapL.removeLayer(gridLinesL); gridLinesL = null; }
+  if (gridLinesR) { mapR.removeLayer(gridLinesR); gridLinesR = null; }
   if (geomLayer){ mapL.removeLayer(geomLayer); geomLayer = null; }
   subPointLayersL.forEach(m => mapL.removeLayer(m));
   subPointLayersR.forEach(m => mapR.removeLayer(m));
@@ -198,6 +236,10 @@ function _renderPixelPlot(plot) {
   const rectStyle = { color:'#f59e0b', weight:2, fillOpacity:.04, dashArray:'5,5' };
   squareL = L.rectangle(rect, rectStyle).addTo(mapL);
   squareR = L.rectangle(rect, rectStyle).addTo(mapR);
+
+  // N×N subdivision guide lines (lighter, behind the markers)
+  gridLinesL = _buildGridLines(plot.lat, plot.lon, dlat, dlon).addTo(mapL);
+  gridLinesR = _buildGridLines(plot.lat, plot.lon, dlat, dlon).addTo(mapR);
 
   // Center marker (blue dot)
   const dotStyle = { radius:5, color:'#fff', weight:2, fillColor:'#3b82f6', fillOpacity:.9 };

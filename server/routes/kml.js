@@ -36,8 +36,8 @@ function _subPointPositions(centerLat, centerLon, sizeM, gridStr) {
   const out = [];
   for (let r = 0; r < n; r++) {
     for (let c = 0; c < n; c++) {
-      const fR = n > 1 ? r / (n - 1) : 0.5;
-      const fC = n > 1 ? c / (n - 1) : 0.5;
+      const fR = (r + 0.5) / n;  // cell center: 1/2n … (2n-1)/2n
+      const fC = (c + 0.5) / n;
       out.push({
         lat: centerLat + dlat * (1 - 2 * fR),
         lon: centerLon + dlon * (-1 + 2 * fC),
@@ -77,6 +77,29 @@ function _uaSquareKml(lat, lon, sizeM, plotId) {
   </Placemark>`;
 }
 
+// n−1 interior subdivision lines of the UA square, matching the browser overlay.
+function _gridLinesKml(lat, lon, sizeM, gridStr) {
+  const n = parseInt(gridStr) || 5;
+  const { dlat, dlon } = _metersToDeg(sizeM, lat);
+  const top = lat + dlat, bot = lat - dlat;
+  const left = lon - dlon, right = lon + dlon;
+  const style = '<Style><LineStyle><color>6600aaff</color><width>1</width></LineStyle></Style>';
+  let segs = '';
+  for (let i = 1; i < n; i++) {
+    const f = i / n;
+    const y = top - 2 * dlat * f;   // horizontal line
+    const x = left + 2 * dlon * f;  // vertical line
+    segs += `
+    <Placemark>${style}<LineString><coordinates>${left},${y},0 ${right},${y},0</coordinates></LineString></Placemark>
+    <Placemark>${style}<LineString><coordinates>${x},${top},0 ${x},${bot},0</coordinates></LineString></Placemark>`;
+  }
+  if (!segs) return '';
+  return `
+  <Folder>
+    <name>UA subdivisions</name>${segs}
+  </Folder>`;
+}
+
 function _subPointsKml(lat, lon, pixelMode) {
   const { plotSizeM, subPointGrid, subPointResults = [], selectedIdx } = pixelMode;
   return _subPointPositions(lat, lon, plotSizeM, subPointGrid).map(({ lat: sLat, lon: sLon, idx }) => {
@@ -112,7 +135,9 @@ router.get('/current.kml', (req, res) => {
   const isPixel = pixelMode && pixelMode.plotSizeM;
 
   const placemarks = isPixel
-    ? _uaSquareKml(lat, lon, pixelMode.plotSizeM, id) + _subPointsKml(lat, lon, pixelMode)
+    ? _uaSquareKml(lat, lon, pixelMode.plotSizeM, id)
+      + _gridLinesKml(lat, lon, pixelMode.plotSizeM, pixelMode.subPointGrid)
+      + _subPointsKml(lat, lon, pixelMode)
     : `
   <Placemark>
     <name>Plot ${id} — ${label}</name>
