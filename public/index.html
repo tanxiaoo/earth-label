@@ -117,13 +117,16 @@
             </div>
             <div id="createCellGridWrap" style="display:none;">
               <label class="field-label">Cell Grid</label>
-              <select id="createCellGrid" class="field-input">
+              <select id="createCellGrid" class="field-input" onchange="app.onCreateCellGridChange()">
                 <option value="2x2">2×2 (4 cells)</option>
                 <option value="3x3" selected>3×3 (9 cells)</option>
                 <option value="4x4">4×4 (16 cells)</option>
                 <option value="5x5">5×5 (25 cells)</option>
+                <option value="custom">Custom N×N…</option>
               </select>
-              <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">Cells tiling the UA square</div>
+              <input type="number" id="createCellGridCustomN" value="8" min="2" max="20" step="1"
+                     class="field-input" style="display:none;margin-top:6px;" placeholder="e.g. 8 for 8×8">
+              <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">Cells tiling the UA square (custom: 2–20 per side)</div>
             </div>
           </div>
         </div>
@@ -287,12 +290,15 @@
           </div>
           <div id="settingsCellGridWrap" style="display:none;">
             <label class="field-label">Cell Grid</label>
-            <select id="settingsCellGrid" class="field-input">
+            <select id="settingsCellGrid" class="field-input" onchange="app.onSettingsCellGridChange()">
               <option value="2x2">2×2 (4 cells)</option>
               <option value="3x3" selected>3×3 (9 cells)</option>
               <option value="4x4">4×4 (16 cells)</option>
               <option value="5x5">5×5 (25 cells)</option>
+              <option value="custom">Custom N×N…</option>
             </select>
+            <input type="number" id="settingsCellGridCustomN" value="8" min="2" max="20" step="1"
+                   class="field-input" style="display:none;margin-top:6px;" placeholder="e.g. 8 for 8×8">
           </div>
         </div>
       </div>

@@ -237,7 +237,7 @@ export function openCreateProjectModal() {
   $('createPlotSizeM').value   = '30';
   $('createPointBoxSizeM').value = '30';
   $('createSubGrid').value     = '5x5';
-  $('createCellGrid').value    = '3x3';
+  _setCellGridControls('createCellGrid', 'createCellGridCustomN', '3x3');
   $('createGridInnerSizeM').value = '0';
   $('createAggRule').value     = 'majority';
   $('createAggThreshold').value = '50';
@@ -296,7 +296,7 @@ export async function createNewProject() {
   const sizeM    = parseFloat($('createPlotSizeM').value) || 30;
   const boxM     = _parsePointBoxSize($('createPointBoxSizeM').value);
   const grid     = $('createSubGrid').value || '5x5';
-  const cellGrid = $('createCellGrid').value || '3x3';
+  const cellGrid = _readCellGrid('createCellGrid', 'createCellGridCustomN');
   const innerM   = _parseGridInnerSize($('createGridInnerSizeM').value, sizeM);
   const aggRule  = $('createAggRule').value || 'majority';
   const aggPct   = parseFloat($('createAggThreshold').value) / 100 || 0.5;
@@ -353,7 +353,7 @@ export function openProjectSettings() {
   $('settingsPlotSizeM').value     = state.plotSizeM;
   $('settingsPointBoxSizeM').value = state.pointBoxSizeM ?? 30;
   $('settingsSubGrid').value       = state.subPointGrid;
-  $('settingsCellGrid').value      = state.cellGrid || '3x3';
+  _setCellGridControls('settingsCellGrid', 'settingsCellGridCustomN', state.cellGrid || '3x3');
   $('settingsGridInnerSizeM').value = state.gridInnerSizeM ?? 0;
   $('settingsAggRule').value       = state.aggregationRule;
   $('settingsAggThreshold').value  = Math.round(state.aggregationThreshold * 100);
@@ -393,13 +393,52 @@ function _parseGridInnerSize(v, plotSizeM) {
   return n;
 }
 
+// ── Cell-grid select + custom N×N input (create & settings modals) ────────
+const CELL_GRID_PRESETS = ['2x2', '3x3', '4x4', '5x5'];
+
+function _clampCellN(v) {
+  const n = parseInt(v, 10);
+  if (!Number.isFinite(n)) return 3;
+  return Math.max(2, Math.min(20, n));
+}
+
+// Read the effective "NxN" value from a cell-grid select + its custom input.
+function _readCellGrid(selectId, customId) {
+  const sel = $(selectId)?.value || '3x3';
+  if (sel !== 'custom') return sel;
+  const n = _clampCellN($(customId)?.value);
+  return `${n}x${n}`;
+}
+
+// Reflect a stored "NxN" value into the select + custom input pair.
+function _setCellGridControls(selectId, customId, value) {
+  const sel = $(selectId), custom = $(customId);
+  if (!sel || !custom) return;
+  if (CELL_GRID_PRESETS.includes(value)) {
+    sel.value = value;
+    custom.style.display = 'none';
+  } else {
+    sel.value = 'custom';
+    custom.value = parseInt(value) || 8;
+    custom.style.display = 'block';
+  }
+}
+
+function _toggleCellGridCustom(selectId, customId) {
+  const custom = $(customId);
+  if (custom) custom.style.display = $(selectId)?.value === 'custom' ? 'block' : 'none';
+}
+
+export function onCreateCellGridChange()   { _toggleCellGridCustom('createCellGrid',   'createCellGridCustomN'); }
+export function onSettingsCellGridChange() { _toggleCellGridCustom('settingsCellGrid', 'settingsCellGridCustomN'); }
+
 export async function saveProjectSettings() {
   if (!state.project) return;
   const mode     = $('settingsAssessMode').value;
   const sizeM    = parseFloat($('settingsPlotSizeM').value) || 30;
   const boxM     = _parsePointBoxSize($('settingsPointBoxSizeM').value);
   const grid     = $('settingsSubGrid').value || '5x5';
-  const cellGrid = $('settingsCellGrid').value || '3x3';
+  const cellGrid = _readCellGrid('settingsCellGrid', 'settingsCellGridCustomN');
   const innerM   = _parseGridInnerSize($('settingsGridInnerSizeM').value, sizeM);
   const aggRule  = $('settingsAggRule').value || 'majority';
   const aggPct   = parseFloat($('settingsAggThreshold').value) / 100 || 0.5;
@@ -1250,6 +1289,7 @@ window.app = {
   openSettings, closeSettings, saveSettings, clearKey, copyGeeAuthCmd,
   openProjectSettings, closeProjectSettings, saveProjectSettings,
   onSettingsAssessModeChange,
+  onCreateCellGridChange, onSettingsCellGridChange,
   openClassEditor, closeClassEditor, saveClassSchema, saveSchemaAsPreset,
   addEditorClass, applyEditorPreset, exportClassSchema, importClassSchema,
   showClassDescription, closeClassDescription,

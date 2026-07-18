@@ -121,7 +121,7 @@ Choose how each plot entry will be classified. This is set at project creation a
 | Setting | Options | Description |
 |---------|---------|-------------|
 | **UA Size** | 10 m / 20 m / 30 m / 50 m / custom | Side length of the UA square (the target pixel) in metres. |
-| **Cell Grid** | 2×2 (4) · 3×3 (9) · 4×4 (16) · 5×5 (25) | Number of cells the square is divided into. |
+| **Cell Grid** | 2×2 (4) · 3×3 (9) · 4×4 (16) · 5×5 (25) · Custom N×N | Number of cells the square is divided into. *Custom* accepts any side length from 2 to 20 (e.g. 8 → 8×8 = 64 cells). |
 | **Inner Grid Size** | 0 = full pixel (default) · custom metres | Optional: tile the cells inside a smaller centered box (e.g. 9 m inside a 10 m pixel) to keep a buffer from the pixel edges. With 0 the cells cover the full pixel, so class percentages correspond exactly to the pixel area. |
 | **Aggregation Rule** | Majority · Threshold % | Same as Pixel mode, applied to cell labels. |
 
