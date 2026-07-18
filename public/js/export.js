@@ -1,6 +1,6 @@
 import { state } from './state.js';
 import * as api from './api.js';
-import { gridCoverSizeM } from './map.js';
+import { gridCoverSizeM, pixelCoverSizeM } from './map.js';
 
 function _download(content, filename, mime) {
   const a = Object.assign(document.createElement('a'), {
@@ -72,6 +72,12 @@ const UA_CSV_COLUMNS = [
     const r = _resultOf(p.id);
     if (r?.subPoints) return r.subPointGrid ?? state.subPointGrid;
     return (!r && state.assessmentMode === 'pixel') ? state.subPointGrid : '';
+  }],
+  ['sub_point_coverage_m', p => {
+    const r = _resultOf(p.id);
+    // Legacy pixel rows predate the buffer option — their lattice spanned the full UA square.
+    if (r?.subPoints) return r.subPointCoverageM ?? r.uaSizeM ?? state.plotSizeM;
+    return (!r && state.assessmentMode === 'pixel') ? pixelCoverSizeM() : '';
   }],
   ['sub_points_json', p => {
     const sp = _resultOf(p.id)?.subPoints;
@@ -299,6 +305,9 @@ function _geoJsonProps(plot) {
     const dominant = sp.filter(s => s.code === winCode).length;
     base.ua_size_m      = r?.uaSizeM ?? state.plotSizeM;
     base.sub_point_grid = r?.subPointGrid ?? state.subPointGrid;
+    base.sub_point_coverage_m = r?.subPoints
+      ? (r.subPointCoverageM ?? r.uaSizeM ?? state.plotSizeM)
+      : pixelCoverSizeM();
     base.sub_points              = sp;
     base.sub_point_total         = sp.length || null;
     base.sub_point_dominant_count = sp.length ? dominant : null;

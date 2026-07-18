@@ -13,7 +13,7 @@ A self-hosted web app for satellite image interpretation and land-cover validati
 - **Multi-source basemaps** — Google Satellite, ESRI World Imagery (latest + Wayback year-end snapshots 2018–2025, no API key required), Bing, Sentinel-2 cloudless (2018–2024), Planet PlanetScope (monthly mosaics 2016–2026)
 - **Dual map / split view** — Compare two basemaps side-by-side with synced pan/zoom
 - **Dynamic classification schemas** — 10 built-in real-world LULC presets (MOLCA, CORINE, IGBP/MODIS, ESA CCI, NLCD, IPCC, Anderson/USGS, FROM-GLC, Binary, Custom). Each project carries its own schema; edit, add, delete classes with color picker and keyboard shortcuts. Save any edited schema as a reusable user preset.
-- **Three assessment modes (per project)** — **Point mode**: classify each sample point directly with one click — ideal for vector point datasets. **Pixel/Plot mode** (Collect Earth Online–compatible): each entry is a pixel/map centre; a correctly-sized Unit of Assessment (UA) square is drawn on the map, a configurable sub-point grid (3×3 or 5×5) is placed inside it, each sub-point is classified individually, and a majority or threshold rule aggregates the sub-point labels to a single plot-level class. **Grid/Cells mode**: the UA square is divided into a cell grid (2×2 / 3×3 / 4×4 / 5×5, or any custom N×N up to 20×20) and each **cell** is labelled by its dominant cover — because cells are areas rather than boundary-sitting points, labels stay stable under small imagery/raster misalignment, and the per-class cell fractions give a clean 0–100% density (e.g. impervious %) per pixel. Optionally the cells can tile a smaller inner box (e.g. 9 m inside a 10 m pixel) to keep a buffer from the pixel edges.
+- **Three assessment modes (per project)** — **Point mode**: classify each sample point directly with one click — ideal for vector point datasets. **Pixel/Plot mode** (Collect Earth Online–compatible): each entry is a pixel/map centre; a correctly-sized Unit of Assessment (UA) square is drawn on the map, a configurable sub-point grid (2×2 / 3×3 / 4×4 / 5×5, or any custom N×N up to 20×20) is placed inside it, each sub-point is classified individually, and a majority or threshold rule aggregates the sub-point labels to a single plot-level class. By default the lattice spans the full UA square (the CEO-standard layout, corner points on the pixel boundary); an optional **sub-point buffer** places the whole lattice inside a smaller centered box (e.g. 9 m in a 10 m pixel) so no point lies on the boundary, and an optional **grid-lines toggle** draws dashed lines through the sub-point rows/columns so the points read as a connected grid. **Grid/Cells mode**: the UA square is divided into a cell grid (2×2 / 3×3 / 4×4 / 5×5, or any custom N×N up to 20×20) and each **cell** is labelled by its dominant cover — because cells are areas rather than boundary-sitting points, labels stay stable under small imagery/raster misalignment, and the per-class cell fractions give a clean 0–100% density (e.g. impervious %) per pixel. Optionally the cells can tile a smaller inner box (e.g. 9 m inside a 10 m pixel) to keep a buffer from the pixel edges.
 - **Configurable UA size** — UA square side length is set per project (quick buttons: 10 m / 20 m / 30 m / 50 m or any custom value). The square is computed in real metres using a latitude-correct degree conversion so it always matches the target map pixel (e.g. 30 m for Landsat/CDL, 10 m for Sentinel-2).
 - **Configurable annotation fields** — Each project defines its own per-plot annotation columns: rename the default `notes` text field, or add more fields (text or yes/no binary) such as `cloud_cover`, `damage_observed`. Each field becomes its own column in CSV / property in GeoJSON exports.
 - **NDVI time-series panel** — Floating, draggable Sentinel-2 monthly NDVI panel with a per-class interpretation guide. Requires Sentinel Hub credentials (stored in `.env`).
@@ -82,6 +82,14 @@ The NDVI panel also shows a per-point **tree canopy height** from the [ECHOSAT](
 3. **Set your Cloud project ID** — in EarthLabel: **⚙ Settings** → *Google Earth Engine Project ID* → paste your project (e.g. `ee-yourname`) → **Save**. Written to `.env` as `GEE_PROJECT`; never sent to the browser.
 
 The Settings panel shows a live "Authenticated ✓ / Not authenticated" status and a copyable `earthengine authenticate` command. Until both the project ID and authentication are set, the canopy readout shows a "set up GEE in Settings" hint; everything else in the app works without it.
+
+### 6. Run the tests (optional)
+
+```bash
+npm test
+```
+
+Uses the built-in Node test runner (no extra dependencies). Includes a coordinate round-trip guard asserting that lat/lon parsed from an uploaded CSV survive to export with no precision loss — the parse→store→export path never rounds or reformats coordinates. (If exported coordinates *look* truncated in Excel, that is Excel's display rounding; the file itself keeps full precision.)
 
 ---
 
@@ -193,7 +201,7 @@ image_source, image_date, time_spent_s, assessment_mode,
 **Pixel mode** adds after `assessment_mode`:
 
 ```
-ua_size_m, sub_point_grid, sub_points_json,
+ua_size_m, sub_point_grid, sub_point_coverage_m, sub_points_json,
 sub_point_total, sub_point_dominant_count, sub_point_agreement_pct,
 sp_0, sp_1, … sp_N-1
 ```
@@ -214,11 +222,12 @@ cell_0, cell_1, … cell_N-1
 | `assessment_mode` | `point`, `pixel` or `grid` |
 | `ua_size_m` | UA square side in metres *(pixel/grid mode)* |
 | `sub_point_grid` | Grid config e.g. `3x3` *(pixel mode only)* |
+| `sub_point_coverage_m` | Side of the box the sub-point lattice spans — equals `ua_size_m` unless a sub-point buffer is set *(pixel mode only)* |
 | `sub_points_json` | Raw JSON array `[{idx,code,label},…]` *(pixel mode only)* |
 | `sub_point_total` | Number of classified sub-points *(pixel mode only)* |
 | `sub_point_dominant_count` | Sub-points matching the winning class *(pixel mode only)* |
 | `sub_point_agreement_pct` | Agreement % for the winning class e.g. `77.8` *(pixel mode only)* |
-| `sp_0` … `sp_N-1` | Class label for each grid position *(pixel mode only; 9 cols for 3×3, 25 for 5×5)* |
+| `sp_0` … `sp_N-1` | Class label for each grid position *(pixel mode only; 4 cols for 2×2, 9 for 3×3, 16 for 4×4, 25 for 5×5, N² for custom)* |
 | `cell_grid` | Cell grid config e.g. `3x3` *(grid mode only)* |
 | `cell_coverage_m` | Side of the box the cells tile — equals `ua_size_m` unless an inner box is set *(grid mode only)* |
 | `cells_json` | Raw JSON array `[{idx,code,label},…]` *(grid mode only)* |

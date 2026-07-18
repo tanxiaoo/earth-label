@@ -1,11 +1,12 @@
 {
   "name": "earth-label",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "description": "Satellite image land cover labeling tool",
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",
-    "dev": "node --watch server/index.js"
+    "dev": "node --watch server/index.js",
+    "test": "node --test"
   },
   "dependencies": {
     "@tmcw/togeojson": "^5.8.0",

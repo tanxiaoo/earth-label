@@ -109,11 +109,16 @@
           <div>
             <div id="createSubGridWrap">
               <label class="field-label">Sub-point Grid</label>
-              <select id="createSubGrid" class="field-input">
+              <select id="createSubGrid" class="field-input" onchange="app.onCreateSubGridChange()">
+                <option value="2x2">2×2 (4 points)</option>
                 <option value="3x3">3×3 (9 points)</option>
+                <option value="4x4">4×4 (16 points)</option>
                 <option value="5x5" selected>5×5 (25 points)</option>
+                <option value="custom">Custom N×N…</option>
               </select>
-              <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">Points placed inside UA square</div>
+              <input type="number" id="createSubGridCustomN" value="8" min="2" max="20" step="1"
+                     class="field-input" style="display:none;margin-top:6px;" placeholder="e.g. 8 for 8×8">
+              <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">Points placed inside UA square (custom: 2–20 per side)</div>
             </div>
             <div id="createCellGridWrap" style="display:none;">
               <label class="field-label">Cell Grid</label>
@@ -136,6 +141,18 @@
           <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">
             Optional: draw the cells inside a smaller centered box (e.g. 9 in a 10 m pixel) to keep a buffer from the pixel edges. 0 tiles the full pixel.
           </div>
+        </div>
+        <div id="createPixelInnerWrap" style="display:none;margin-top:10px;">
+          <label class="field-label">Sub-point Buffer — Inner Grid Size (meters) — 0 = full square</label>
+          <input type="number" id="createPixelInnerSizeM" value="0" min="0" max="500" step="0.5" class="field-input" placeholder="0">
+          <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">
+            0 = CEO-standard layout: points span the full UA square, corner points on its boundary.
+            Set e.g. 9 in a 10 m pixel to place the whole point lattice inside a smaller centered box, keeping every point buffered from the pixel edges.
+          </div>
+          <label style="display:flex;align-items:center;gap:6px;margin-top:10px;font-size:12px;cursor:pointer;">
+            <input type="checkbox" id="createPixelGridLines">
+            Show grid lines — dashed lines connecting the sub-point rows and columns
+          </label>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;">
           <div>
@@ -283,10 +300,15 @@
         <div>
           <div id="settingsSubGridWrap">
             <label class="field-label">Sub-point Grid</label>
-            <select id="settingsSubGrid" class="field-input">
+            <select id="settingsSubGrid" class="field-input" onchange="app.onSettingsSubGridChange()">
+              <option value="2x2">2×2 (4 points)</option>
               <option value="3x3">3×3 (9 points)</option>
+              <option value="4x4">4×4 (16 points)</option>
               <option value="5x5" selected>5×5 (25 points)</option>
+              <option value="custom">Custom N×N…</option>
             </select>
+            <input type="number" id="settingsSubGridCustomN" value="8" min="2" max="20" step="1"
+                   class="field-input" style="display:none;margin-top:6px;" placeholder="e.g. 8 for 8×8">
           </div>
           <div id="settingsCellGridWrap" style="display:none;">
             <label class="field-label">Cell Grid</label>
@@ -308,6 +330,18 @@
         <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">
           Optional: draw the cells inside a smaller centered box (e.g. 9 in a 10 m pixel) to keep a buffer from the pixel edges. 0 tiles the full pixel.
         </div>
+      </div>
+      <div id="settingsPixelInnerWrap" style="display:none;margin-top:10px;">
+        <label class="field-label">Sub-point Buffer — Inner Grid Size (meters) — 0 = full square</label>
+        <input type="number" id="settingsPixelInnerSizeM" value="0" min="0" max="500" step="0.5" class="field-input">
+        <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">
+          0 = CEO-standard layout: points span the full UA square, corner points on its boundary.
+          Set e.g. 9 in a 10 m pixel to place the whole point lattice inside a smaller centered box, keeping every point buffered from the pixel edges.
+        </div>
+        <label style="display:flex;align-items:center;gap:6px;margin-top:10px;font-size:12px;cursor:pointer;">
+          <input type="checkbox" id="settingsPixelGridLines">
+          Show grid lines — dashed lines connecting the sub-point rows and columns
+        </label>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;">
         <div>

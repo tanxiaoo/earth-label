@@ -2,7 +2,7 @@ import { state, setState } from './state.js';
 import * as api from './api.js';
 import { initMap, navigateToPlot, setMapLayer, switchBasemap, toggleSplitView,
          updateEsriYear, updateSentinel2Year, updatePlanetParams,
-         highlightSubPoint, refreshSubPoint, gridCoverSizeM,
+         highlightSubPoint, refreshSubPoint, gridCoverSizeM, pixelCoverSizeM,
          registerSubPointClickHandler } from './map.js';
 import { renderClassButtons, openClassEditor, closeClassEditor, saveClassSchema,
          saveSchemaAsPreset, addEditorClass, applyEditorPreset, exportClassSchema,
@@ -166,6 +166,8 @@ async function loadProject(id) {
     plotSizeM:            proj.plotSizeM            || 30,
     pointBoxSizeM:        proj.pointBoxSizeM ?? 30,
     subPointGrid:         proj.subPointGrid         || '5x5',
+    pixelInnerSizeM:      proj.pixelInnerSizeM      ?? 0,
+    pixelGridLines:       proj.pixelGridLines       ?? false,
     cellGrid:             proj.cellGrid             || '3x3',
     gridInnerSizeM:       proj.gridInnerSizeM       ?? 0,
     aggregationRule:      proj.aggregationRule      || 'majority',
@@ -203,7 +205,9 @@ function _updateUABadge() {
   const el = $('uaModeBadge');
   if (!el) return;
   if (state.assessmentMode === 'pixel') {
-    el.textContent = `Pixel ${state.plotSizeM}m · ${state.subPointGrid}`;
+    const inner = Number(state.pixelInnerSizeM) || 0;
+    const core  = (inner > 0 && inner < state.plotSizeM) ? ` · ${inner}m core` : '';
+    el.textContent = `Pixel ${state.plotSizeM}m · ${state.subPointGrid}${core}`;
   } else if (state.assessmentMode === 'grid') {
     const inner = Number(state.gridInnerSizeM) || 0;
     const core  = (inner > 0 && inner < state.plotSizeM) ? ` · ${inner}m core` : '';
@@ -236,8 +240,10 @@ export function openCreateProjectModal() {
   _toggleCreateUAFields('point');
   $('createPlotSizeM').value   = '30';
   $('createPointBoxSizeM').value = '30';
-  $('createSubGrid').value     = '5x5';
-  _setCellGridControls('createCellGrid', 'createCellGridCustomN', '3x3');
+  _setGridSelectControls('createSubGrid',  'createSubGridCustomN',  '5x5');
+  _setGridSelectControls('createCellGrid', 'createCellGridCustomN', '3x3');
+  $('createPixelInnerSizeM').value = '0';
+  $('createPixelGridLines').checked = false;
   $('createGridInnerSizeM').value = '0';
   $('createAggRule').value     = 'majority';
   $('createAggThreshold').value = '50';
@@ -256,13 +262,15 @@ export function onCreateAssessModeChange() {
 
 function _toggleCreateUAFields(mode) {
   _toggleUAFieldContainers(mode, 'createUAFields', 'createPointFields',
-                           'createSubGridWrap', 'createCellGridWrap', 'createGridInnerWrap');
+                           'createSubGridWrap', 'createCellGridWrap',
+                           'createGridInnerWrap', 'createPixelInnerWrap');
 }
 
 // Shared show/hide logic for the create + settings modals. The UA container
-// serves both pixel and grid modes; inside it the sub-point grid selector is
-// pixel-only and the cell grid / inner-size fields are grid-only.
-function _toggleUAFieldContainers(mode, uaId, pointId, subGridId, cellGridId, innerId) {
+// serves both pixel and grid modes; inside it the sub-point grid selector +
+// sub-point buffer are pixel-only and the cell grid / inner-size fields are
+// grid-only.
+function _toggleUAFieldContainers(mode, uaId, pointId, subGridId, cellGridId, innerId, pixelInnerId) {
   const isMulti = mode === 'pixel' || mode === 'grid';
   const ua = $(uaId);
   if (ua) ua.style.display = isMulti ? 'block' : 'none';
@@ -274,6 +282,8 @@ function _toggleUAFieldContainers(mode, uaId, pointId, subGridId, cellGridId, in
   if (cg) cg.style.display = mode === 'grid' ? 'block' : 'none';
   const gi = $(innerId);
   if (gi) gi.style.display = mode === 'grid' ? 'block' : 'none';
+  const pi = $(pixelInnerId);
+  if (pi) pi.style.display = mode === 'pixel' ? 'block' : 'none';
 }
 
 export async function onPresetChange() {
@@ -295,8 +305,10 @@ export async function createNewProject() {
   const mode     = document.querySelector('input[name="createAssessMode"]:checked')?.value || 'point';
   const sizeM    = parseFloat($('createPlotSizeM').value) || 30;
   const boxM     = _parsePointBoxSize($('createPointBoxSizeM').value);
-  const grid     = $('createSubGrid').value || '5x5';
-  const cellGrid = _readCellGrid('createCellGrid', 'createCellGridCustomN');
+  const grid     = _readGridSelect('createSubGrid', 'createSubGridCustomN', '5x5');
+  const pixInner = _parseGridInnerSize($('createPixelInnerSizeM').value, sizeM);
+  const pixLines = !!$('createPixelGridLines').checked;
+  const cellGrid = _readGridSelect('createCellGrid', 'createCellGridCustomN');
   const innerM   = _parseGridInnerSize($('createGridInnerSizeM').value, sizeM);
   const aggRule  = $('createAggRule').value || 'majority';
   const aggPct   = parseFloat($('createAggThreshold').value) / 100 || 0.5;
@@ -306,6 +318,8 @@ export async function createNewProject() {
     plotSizeM:            sizeM,
     pointBoxSizeM:        boxM,
     subPointGrid:         grid,
+    pixelInnerSizeM:      pixInner,
+    pixelGridLines:       pixLines,
     cellGrid:             cellGrid,
     gridInnerSizeM:       innerM,
     aggregationRule:      aggRule,
@@ -352,8 +366,10 @@ export function openProjectSettings() {
   _toggleSettingsUAFields(state.assessmentMode);
   $('settingsPlotSizeM').value     = state.plotSizeM;
   $('settingsPointBoxSizeM').value = state.pointBoxSizeM ?? 30;
-  $('settingsSubGrid').value       = state.subPointGrid;
-  _setCellGridControls('settingsCellGrid', 'settingsCellGridCustomN', state.cellGrid || '3x3');
+  _setGridSelectControls('settingsSubGrid',  'settingsSubGridCustomN',  state.subPointGrid || '5x5');
+  _setGridSelectControls('settingsCellGrid', 'settingsCellGridCustomN', state.cellGrid || '3x3');
+  $('settingsPixelInnerSizeM').value = state.pixelInnerSizeM ?? 0;
+  $('settingsPixelGridLines').checked = !!state.pixelGridLines;
   $('settingsGridInnerSizeM').value = state.gridInnerSizeM ?? 0;
   $('settingsAggRule').value       = state.aggregationRule;
   $('settingsAggThreshold').value  = Math.round(state.aggregationThreshold * 100);
@@ -369,7 +385,8 @@ export function onSettingsAssessModeChange() {
 
 function _toggleSettingsUAFields(mode) {
   _toggleUAFieldContainers(mode, 'settingsUAFields', 'settingsPointFields',
-                           'settingsSubGridWrap', 'settingsCellGridWrap', 'settingsGridInnerWrap');
+                           'settingsSubGridWrap', 'settingsCellGridWrap',
+                           'settingsGridInnerWrap', 'settingsPixelInnerWrap');
 }
 
 // Clamp point-mode box size to allowed steps {0, 10, 20, 30, 50}.
@@ -394,7 +411,7 @@ function _parseGridInnerSize(v, plotSizeM) {
 }
 
 // ── Cell-grid select + custom N×N input (create & settings modals) ────────
-const CELL_GRID_PRESETS = ['2x2', '3x3', '4x4', '5x5'];
+const GRID_PRESETS = ['2x2', '3x3', '4x4', '5x5'];
 
 function _clampCellN(v) {
   const n = parseInt(v, 10);
@@ -402,19 +419,19 @@ function _clampCellN(v) {
   return Math.max(2, Math.min(20, n));
 }
 
-// Read the effective "NxN" value from a cell-grid select + its custom input.
-function _readCellGrid(selectId, customId) {
-  const sel = $(selectId)?.value || '3x3';
+// Read the effective "NxN" value from a grid select + its custom input.
+function _readGridSelect(selectId, customId, fallback = '3x3') {
+  const sel = $(selectId)?.value || fallback;
   if (sel !== 'custom') return sel;
   const n = _clampCellN($(customId)?.value);
   return `${n}x${n}`;
 }
 
 // Reflect a stored "NxN" value into the select + custom input pair.
-function _setCellGridControls(selectId, customId, value) {
+function _setGridSelectControls(selectId, customId, value) {
   const sel = $(selectId), custom = $(customId);
   if (!sel || !custom) return;
-  if (CELL_GRID_PRESETS.includes(value)) {
+  if (GRID_PRESETS.includes(value)) {
     sel.value = value;
     custom.style.display = 'none';
   } else {
@@ -424,28 +441,33 @@ function _setCellGridControls(selectId, customId, value) {
   }
 }
 
-function _toggleCellGridCustom(selectId, customId) {
+function _toggleGridSelectCustom(selectId, customId) {
   const custom = $(customId);
   if (custom) custom.style.display = $(selectId)?.value === 'custom' ? 'block' : 'none';
 }
 
-export function onCreateCellGridChange()   { _toggleCellGridCustom('createCellGrid',   'createCellGridCustomN'); }
-export function onSettingsCellGridChange() { _toggleCellGridCustom('settingsCellGrid', 'settingsCellGridCustomN'); }
+export function onCreateCellGridChange()   { _toggleGridSelectCustom('createCellGrid',   'createCellGridCustomN'); }
+export function onSettingsCellGridChange() { _toggleGridSelectCustom('settingsCellGrid', 'settingsCellGridCustomN'); }
+export function onCreateSubGridChange()    { _toggleGridSelectCustom('createSubGrid',    'createSubGridCustomN'); }
+export function onSettingsSubGridChange()  { _toggleGridSelectCustom('settingsSubGrid',  'settingsSubGridCustomN'); }
 
 export async function saveProjectSettings() {
   if (!state.project) return;
   const mode     = $('settingsAssessMode').value;
   const sizeM    = parseFloat($('settingsPlotSizeM').value) || 30;
   const boxM     = _parsePointBoxSize($('settingsPointBoxSizeM').value);
-  const grid     = $('settingsSubGrid').value || '5x5';
-  const cellGrid = _readCellGrid('settingsCellGrid', 'settingsCellGridCustomN');
+  const grid     = _readGridSelect('settingsSubGrid', 'settingsSubGridCustomN', '5x5');
+  const pixInner = _parseGridInnerSize($('settingsPixelInnerSizeM').value, sizeM);
+  const pixLines = !!$('settingsPixelGridLines').checked;
+  const cellGrid = _readGridSelect('settingsCellGrid', 'settingsCellGridCustomN');
   const innerM   = _parseGridInnerSize($('settingsGridInnerSizeM').value, sizeM);
   const aggRule  = $('settingsAggRule').value || 'majority';
   const aggPct   = parseFloat($('settingsAggThreshold').value) / 100 || 0.5;
 
   const uaSettings = {
     assessmentMode: mode, plotSizeM: sizeM, pointBoxSizeM: boxM,
-    subPointGrid: grid, cellGrid, gridInnerSizeM: innerM,
+    subPointGrid: grid, pixelInnerSizeM: pixInner, pixelGridLines: pixLines,
+    cellGrid, gridInnerSizeM: innerM,
     aggregationRule: aggRule, aggregationThreshold: aggPct,
   };
 
@@ -455,6 +477,7 @@ export async function saveProjectSettings() {
     mode     !== state.assessmentMode ||
     sizeM    !== state.plotSizeM      ||
     grid     !== state.subPointGrid   ||
+    pixInner !== state.pixelInnerSizeM ||
     cellGrid !== state.cellGrid       ||
     innerM   !== state.gridInnerSizeM;
 
@@ -462,7 +485,8 @@ export async function saveProjectSettings() {
     await api.saveProjectSettings(state.project.id, uaSettings);
     setState({
       assessmentMode: mode, plotSizeM: sizeM, pointBoxSizeM: boxM,
-      subPointGrid: grid, cellGrid, gridInnerSizeM: innerM,
+      subPointGrid: grid, pixelInnerSizeM: pixInner, pixelGridLines: pixLines,
+      cellGrid, gridInnerSizeM: innerM,
       aggregationRule: aggRule, aggregationThreshold: aggPct,
     });
     // Patch local project object too
@@ -772,7 +796,9 @@ function _buildPixelModeForKml(plotId) {
     payload.cellGrid       = state.cellGrid;
     payload.gridInnerSizeM = state.gridInnerSizeM;
   } else {
-    payload.subPointGrid   = state.subPointGrid;
+    payload.subPointGrid    = state.subPointGrid;
+    payload.pixelInnerSizeM = state.pixelInnerSizeM;
+    payload.pixelGridLines  = state.pixelGridLines;
   }
   return payload;
 }
@@ -834,7 +860,8 @@ function _unitsMatchCurrentGeometry(r) {
   const storedGrid = isGrid ? r.cellGrid : r.subPointGrid;
   if (storedGrid != null) {
     if (storedGrid !== (isGrid ? state.cellGrid : state.subPointGrid)) return false;
-    if (isGrid && r.cellCoverageM != null && Number(r.cellCoverageM) !== gridCoverSizeM()) return false;
+    if (isGrid  && r.cellCoverageM     != null && Number(r.cellCoverageM)     !== gridCoverSizeM())  return false;
+    if (!isGrid && r.subPointCoverageM != null && Number(r.subPointCoverageM) !== pixelCoverSizeM()) return false;
     return true;
   }
   // Legacy result without stored geometry: best effort — match by unit count
@@ -1129,7 +1156,7 @@ async function _submitPixelPlot() {
     uaSizeM:        state.plotSizeM,
     ...(state.assessmentMode === 'grid'
       ? { cellGrid: state.cellGrid, cellCoverageM: gridCoverSizeM(), cells: units }
-      : { subPointGrid: state.subPointGrid, subPoints: units }),
+      : { subPointGrid: state.subPointGrid, subPointCoverageM: pixelCoverSizeM(), subPoints: units }),
   };
 
   const plots = [...state.plots];
@@ -1290,6 +1317,7 @@ window.app = {
   openProjectSettings, closeProjectSettings, saveProjectSettings,
   onSettingsAssessModeChange,
   onCreateCellGridChange, onSettingsCellGridChange,
+  onCreateSubGridChange, onSettingsSubGridChange,
   openClassEditor, closeClassEditor, saveClassSchema, saveSchemaAsPreset,
   addEditorClass, applyEditorPreset, exportClassSchema, importClassSchema,
   showClassDescription, closeClassDescription,

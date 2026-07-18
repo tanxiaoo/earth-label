@@ -9,6 +9,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [2.4.0] - 2026-07-18
+
+### Added
+- **Pixel mode — optional sub-point buffer** (`pixelInnerSizeM`, default 0 = full UA square): by default the sub-point lattice keeps the CEO-standard layout with corner points on the pixel boundary; setting an inner size (e.g. 9 m in a 10 m pixel) places the whole lattice inside a smaller centered box — shown as a faint dashed outline — so no point lies on the boundary. Same concept as grid mode's inner box, applied to points. Reflected in the GEP KML sub-point placemarks and the sidebar badge (e.g. `Pixel 10m · 3x3 · 9m core`). (`public/js/state.js`, `public/js/map.js`, `public/js/app.js`, `public/index.html`, `server/routes/projects.js`, `server/routes/kml.js`)
+- **Unified grid options across modes**: the pixel-mode Sub-point Grid now offers the same choices as the grid-mode Cell Grid — 2×2 / 3×3 / 4×4 / 5×5 presets plus a Custom N×N input (2–20 per side). One shared select+custom control drives both. (`public/index.html`, `public/js/app.js`)
+- **Pixel mode — grid-lines toggle** (`pixelGridLines`, default off): draws dashed lines through the sub-point rows and columns, in the browser and in the GEP KML overlay, so the points read as a connected grid. Display-only — toggling it never resets labels. (`public/js/state.js`, `public/js/map.js`, `public/js/app.js`, `public/index.html`, `server/routes/projects.js`, `server/routes/kml.js`)
+- **Export — `sub_point_coverage_m`** (pixel mode): the side of the box the sub-point lattice spans, stored per result at submit time (equals `ua_size_m` unless a buffer is set); geometry matching for stored results also compares it, so buffer changes correctly invalidate label reuse. (`public/js/export.js`, `public/js/app.js`)
+- **Test harness** (`npm test`, Node built-in test runner) with a CSV coordinate round-trip regression test, adapted from the `feat/pixel-mode` branch by @tanxiaoo. (`test/gis-parser.roundtrip.test.js`, `package.json`)
+
+### Investigated
+- **Coordinate precision**: audited the parse→store→export path for the reported "coordinates shift in the output CSV". No truncation exists — the CSV/GeoJSON parsers store full-precision floats (`parseFloat`, no `toFixed`) and the exporters write them verbatim; the new regression test guards this permanently. Rounded coordinates seen in exports are a display artifact of spreadsheet software (Excel shows ~15 significant digits); the exported files keep full precision. The only intentional coordinate transformation remains the polygon-centroid fallback for polygon imports.
+
+---
+
 ## [2.3.0] - 2026-07-18
 
 ### Added

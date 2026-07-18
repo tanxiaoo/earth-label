@@ -23,8 +23,10 @@ export const state = {
   assessmentMode:       'point',
   plotSizeM:            30,      // UA square side length in meters (pixel/grid mode)
   pointBoxSizeM:        30,      // Optional square overlay side length in meters (point mode); 0 = off
-  subPointGrid:         '5x5',   // "3x3" (9 pts) | "5x5" (25 pts)
-  cellGrid:             '3x3',   // grid mode: "2x2" | "3x3" | "4x4" | "5x5" cells
+  subPointGrid:         '5x5',   // pixel mode: "2x2" … "5x5" or custom "NxN" points
+  pixelInnerSizeM:      0,       // pixel mode: sub-points span this inner box (m); 0 = full UA square (CEO standard)
+  pixelGridLines:       false,   // pixel mode: dashed lines through the sub-point rows/columns
+  cellGrid:             '3x3',   // grid mode: "2x2" … "5x5" or custom "NxN" cells
   gridInnerSizeM:       0,       // grid mode: cells cover this inner box (m); 0 = full UA square
   aggregationRule:      'majority', // "majority" | "threshold"
   aggregationThreshold: 0.5,     // fraction needed to win (threshold rule)

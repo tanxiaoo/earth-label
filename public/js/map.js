@@ -14,6 +14,8 @@ function _boxSizeSuffix() {
   return m > 0 ? ` | ${m} m` : '';
 }
 let markerL, squareL, markerR, squareR;
+let innerSquareL, innerSquareR;   // pixel-mode buffer outline (inner box)
+let subGridLinesL, subGridLinesR; // pixel-mode lattice lines through the sub-points
 let layerL, layerR;
 let geomLayer = null;  // polygon/geometry overlay
 
@@ -139,6 +141,16 @@ export function gridCoverSizeM() {
   return (inner > 0 && inner < plot) ? inner : plot;
 }
 
+// Pixel mode: the side (m) of the box the sub-point lattice spans. 0 /
+// invalid = the full UA square (CEO-standard layout with corner points on
+// the pixel boundary); a smaller inner box keeps every point buffered
+// inside the pixel.
+export function pixelCoverSizeM() {
+  const plot  = Number(state.plotSizeM) || 30;
+  const inner = Number(state.pixelInnerSizeM) || 0;
+  return (inner > 0 && inner < plot) ? inner : plot;
+}
+
 // Generate the {bounds, idx} rectangles for the cell grid. Cells tile the
 // coverSizeM box edge-to-edge; idx is row-major from the top-left, matching
 // the sub-point convention.
@@ -187,6 +199,10 @@ function _clearPlotLayers() {
   if (squareL)  { mapL.removeLayer(squareL);  squareL  = null; }
   if (markerR)  { mapR.removeLayer(markerR);  markerR  = null; }
   if (squareR)  { mapR.removeLayer(squareR);  squareR  = null; }
+  if (innerSquareL) { mapL.removeLayer(innerSquareL); innerSquareL = null; }
+  if (innerSquareR) { mapR.removeLayer(innerSquareR); innerSquareR = null; }
+  if (subGridLinesL) { mapL.removeLayer(subGridLinesL); subGridLinesL = null; }
+  if (subGridLinesR) { mapR.removeLayer(subGridLinesR); subGridLinesR = null; }
   if (geomLayer){ mapL.removeLayer(geomLayer); geomLayer = null; }
   subPointLayersL.forEach(m => mapL.removeLayer(m));
   subPointLayersR.forEach(m => mapR.removeLayer(m));
@@ -226,6 +242,25 @@ function _renderPixelPlot(plot) {
   squareL = L.rectangle(rect, rectStyle).addTo(mapL);
   squareR = L.rectangle(rect, rectStyle).addTo(mapR);
 
+  // Optional buffer: faint outline of the inner box the sub-points span
+  const cover = pixelCoverSizeM();
+  if (cover < (Number(state.plotSizeM) || 30)) {
+    const inner = metersToDeg(cover, plot.lat);
+    const innerRect = [
+      [plot.lat - inner.dlat, plot.lon - inner.dlon],
+      [plot.lat + inner.dlat, plot.lon + inner.dlon],
+    ];
+    const innerStyle = { color:'rgba(255,255,255,0.55)', weight:1, fillOpacity:0, dashArray:'3,4', interactive:false };
+    innerSquareL = L.rectangle(innerRect, innerStyle).addTo(mapL);
+    innerSquareR = L.rectangle(innerRect, innerStyle).addTo(mapR);
+  }
+
+  // Optional lattice lines through the sub-point rows/columns (under the markers)
+  if (state.pixelGridLines) {
+    subGridLinesL = _buildSubPointGridLines(plot.lat, plot.lon, cover, state.subPointGrid).addTo(mapL);
+    subGridLinesR = _buildSubPointGridLines(plot.lat, plot.lon, cover, state.subPointGrid).addTo(mapR);
+  }
+
   // Center marker (blue dot)
   const dotStyle = { radius:5, color:'#fff', weight:2, fillColor:'#3b82f6', fillOpacity:.9 };
   markerL = L.circleMarker([plot.lat, plot.lon], dotStyle).addTo(mapL);
@@ -235,9 +270,31 @@ function _renderPixelPlot(plot) {
   _renderSubPoints(plot);
 }
 
-// Draw sub-point circles; colour them if already classified
+// Dashed lines along each row and column of the sub-point lattice, so the
+// points read as a connected grid. Same fractions as the point positions
+// (r/(n-1) across the cover box) — every line passes through its points.
+function _buildSubPointGridLines(centerLat, centerLon, coverSizeM, gridStr) {
+  const n = parseInt(gridStr) || 5;
+  const { dlat, dlon } = metersToDeg(coverSizeM, centerLat);
+  const top = centerLat + dlat, bot = centerLat - dlat;
+  const left = centerLon - dlon, right = centerLon + dlon;
+  const style = { color:'rgba(255,255,255,0.5)', weight:1, dashArray:'3,4', interactive:false };
+  const lines = [];
+  for (let i = 0; i < n; i++) {
+    const f = n > 1 ? i / (n - 1) : 0.5;
+    const lat = top - 2 * dlat * f;
+    const lon = left + 2 * dlon * f;
+    lines.push(L.polyline([[lat, left], [lat, right]], style));
+    lines.push(L.polyline([[top, lon], [bot, lon]], style));
+  }
+  return L.featureGroup(lines);
+}
+
+// Draw sub-point circles; colour them if already classified. The lattice
+// spans pixelCoverSizeM() — the full UA square by default, or the buffered
+// inner box when pixelInnerSizeM is set.
 function _renderSubPoints(plot) {
-  const positions  = generateSubPointPositions(plot.lat, plot.lon, state.plotSizeM, state.subPointGrid);
+  const positions  = generateSubPointPositions(plot.lat, plot.lon, pixelCoverSizeM(), state.subPointGrid);
   const plotResults = (state.subPointResults[plot.id] || {});
   const schema      = state.project?.classSchema || [];
 

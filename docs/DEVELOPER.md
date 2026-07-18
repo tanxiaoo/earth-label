@@ -87,9 +87,14 @@ export const state = {
   ndviPanelOpen:    false,
 
   // ── Assessment / UA (per project, persisted server-side) ─────────────────
-  assessmentMode:       'point',    // 'point' | 'pixel'
-  plotSizeM:            30,         // UA square side in metres (pixel mode)
-  subPointGrid:         '5x5',      // '3x3' | '5x5'
+  assessmentMode:       'point',    // 'point' | 'pixel' | 'grid'
+  plotSizeM:            30,         // UA square side in metres (pixel/grid mode; decimals allowed)
+  pointBoxSizeM:        30,         // point mode: optional focus box, 0 = off
+  subPointGrid:         '5x5',      // pixel mode: '2x2'…'5x5' or custom 'NxN' (2–20)
+  pixelInnerSizeM:      0,          // pixel mode: sub-point lattice spans this inner box; 0 = full square (CEO standard)
+  pixelGridLines:       false,      // pixel mode: dashed lattice lines through the sub-points (display-only)
+  cellGrid:             '3x3',      // grid mode: '2x2'…'5x5' or custom 'NxN' (2–20)
+  gridInnerSizeM:       0,          // grid mode: cells tile this inner box; 0 = full square
   aggregationRule:      'majority', // 'majority' | 'threshold'
   aggregationThreshold: 0.5,        // fraction (threshold rule only)
 
@@ -150,10 +155,15 @@ A project file in `data/projects/<id>.json`:
     },
     …
   ],
-  // ── UA / Assessment settings (v2.1) ──────────────────────────────────────
-  "assessmentMode":       "pixel",    // "point" | "pixel"
-  "plotSizeM":            30,         // UA square side in metres
-  "subPointGrid":         "5x5",      // "3x3" | "5x5"
+  // ── UA / Assessment settings (v2.1, extended v2.3–v2.4) ─────────────────
+  "assessmentMode":       "pixel",    // "point" | "pixel" | "grid"
+  "plotSizeM":            30,         // UA square side in metres (decimals allowed)
+  "pointBoxSizeM":        30,         // point mode: optional focus box, 0 = off
+  "subPointGrid":         "5x5",      // pixel mode: "2x2"…"5x5" or custom "NxN"
+  "pixelInnerSizeM":      0,          // pixel mode: sub-point buffer inner box; 0 = full square
+  "pixelGridLines":       false,      // pixel mode: dashed lattice lines through the sub-points
+  "cellGrid":             "3x3",      // grid mode: "2x2"…"5x5" or custom "NxN"
+  "gridInnerSizeM":       0,          // grid mode: cell inner box; 0 = full square
   "aggregationRule":      "majority", // "majority" | "threshold"
   "aggregationThreshold": 0.5,        // fraction (threshold rule only)
 
