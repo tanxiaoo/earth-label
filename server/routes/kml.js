@@ -141,8 +141,11 @@ function _cellsKml(lat, lon, pixelMode) {
 }
 
 function _subPointsKml(lat, lon, pixelMode) {
-  const { plotSizeM, subPointGrid, subPointResults = [], selectedIdx } = pixelMode;
-  return _subPointPositions(lat, lon, plotSizeM, subPointGrid).map(({ lat: sLat, lon: sLon, idx }) => {
+  const { plotSizeM, subPointGrid, pixelInnerSizeM, subPointResults = [], selectedIdx } = pixelMode;
+  // Optional buffer: the lattice spans a smaller centered box instead of the full UA square
+  const inner = Number(pixelInnerSizeM) || 0;
+  const coverSizeM = (inner > 0 && inner < plotSizeM) ? inner : plotSizeM;
+  return _subPointPositions(lat, lon, coverSizeM, subPointGrid).map(({ lat: sLat, lon: sLon, idx }) => {
     const result    = subPointResults.find(r => r.idx === idx);
     const isSelected = idx === selectedIdx;
     // orange (#f59e0b) for selected, class colour for classified, grey for unclassified
