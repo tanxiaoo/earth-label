@@ -152,6 +152,7 @@ See [docs/](docs/) for detailed guides.
 - [docs/SCHEMAS.md](docs/SCHEMAS.md) — All 10 LULC presets with class lists, sources, and citations
 - [docs/DEVELOPER.md](docs/DEVELOPER.md) — Architecture, API reference, how to add features
 - [docs/GIS_FORMATS.md](docs/GIS_FORMATS.md) — Supported import formats and field-name conventions
+- [docs/ROADMAP.md](docs/ROADMAP.md) — Ideas and future improvements (e.g. label transfer between assessment modes)
 
 ---
 
