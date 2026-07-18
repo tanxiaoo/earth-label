@@ -113,7 +113,8 @@ Choose how each plot entry will be classified. This is set at project creation a
 | Setting | Options | Description |
 |---------|---------|-------------|
 | **UA Size** | 10 m / 20 m / 30 m / 50 m / custom | Side length of the UA square in metres. Use 10 m for Sentinel-2, 30 m for Landsat / CDL. |
-| **Sub-point Grid** | 3×3 (9 pts) · 5×5 (25 pts) | Number of sample points placed uniformly inside the UA square. |
+| **Sub-point Grid** | 2×2 (4 pts) · 3×3 (9 pts) · 4×4 (16 pts) · 5×5 (25 pts) · Custom N×N | Number of sample points placed uniformly inside the UA square. *Custom* accepts any side length from 2 to 20. |
+| **Sub-point Buffer** | 0 = full square (default) · custom metres | With 0, the lattice spans the full UA square — the CEO-standard layout with corner points on the pixel boundary. Set e.g. 9 in a 10 m pixel to place the whole lattice inside a smaller centered box (shown as a faint dashed outline) so no point lies on the boundary. |
 | **Aggregation Rule** | Majority · Threshold % | How sub-point labels are combined into one plot label. *Majority*: the class with the most points wins. *Threshold*: a class must reach the set percentage to win, otherwise majority is used. |
 
 **Grid / Cells settings** (only shown when Grid mode is selected):
