@@ -25,6 +25,7 @@ export const state = {
   pointBoxSizeM:        30,      // Optional square overlay side length in meters (point mode); 0 = off
   subPointGrid:         '5x5',   // pixel mode: "2x2" … "5x5" or custom "NxN" points
   pixelInnerSizeM:      0,       // pixel mode: sub-points span this inner box (m); 0 = full UA square (CEO standard)
+  pixelGridLines:       false,   // pixel mode: dashed lines through the sub-point rows/columns
   cellGrid:             '3x3',   // grid mode: "2x2" … "5x5" or custom "NxN" cells
   gridInnerSizeM:       0,       // grid mode: cells cover this inner box (m); 0 = full UA square
   aggregationRule:      'majority', // "majority" | "threshold"

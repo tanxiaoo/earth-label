@@ -111,6 +111,7 @@ router.post('/json', (req, res) => {
     pointBoxSizeM:        ua.pointBoxSizeM        ?? 30,
     subPointGrid:         ua.subPointGrid         || '5x5',
     pixelInnerSizeM:      ua.pixelInnerSizeM      ?? 0,
+    pixelGridLines:       ua.pixelGridLines       ?? false,
     cellGrid:             ua.cellGrid             || '3x3',
     gridInnerSizeM:       ua.gridInnerSizeM       ?? 0,
     aggregationRule:      ua.aggregationRule      || 'majority',
@@ -180,6 +181,7 @@ router.post('/', upload.single('file'), async (req, res) => {
     pointBoxSizeM:        uaSettings.pointBoxSizeM        ?? 30,
     subPointGrid:         uaSettings.subPointGrid         || '5x5',
     pixelInnerSizeM:      uaSettings.pixelInnerSizeM      ?? 0,
+    pixelGridLines:       uaSettings.pixelGridLines       ?? false,
     cellGrid:             uaSettings.cellGrid             || '3x3',
     gridInnerSizeM:       uaSettings.gridInnerSizeM       ?? 0,
     aggregationRule:      uaSettings.aggregationRule      || 'majority',
@@ -227,6 +229,7 @@ router.patch('/:id', (req, res) => {
     if (uaSettings.pointBoxSizeM        != null) proj.pointBoxSizeM        = uaSettings.pointBoxSizeM;
     if (uaSettings.subPointGrid         != null) proj.subPointGrid         = uaSettings.subPointGrid;
     if (uaSettings.pixelInnerSizeM      != null) proj.pixelInnerSizeM      = uaSettings.pixelInnerSizeM;
+    if (uaSettings.pixelGridLines       != null) proj.pixelGridLines       = uaSettings.pixelGridLines;
     if (uaSettings.cellGrid             != null) proj.cellGrid             = uaSettings.cellGrid;
     if (uaSettings.gridInnerSizeM       != null) proj.gridInnerSizeM       = uaSettings.gridInnerSizeM;
     if (uaSettings.aggregationRule      != null) proj.aggregationRule      = uaSettings.aggregationRule;

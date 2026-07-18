@@ -140,12 +140,33 @@ function _cellsKml(lat, lon, pixelMode) {
   }).join('');
 }
 
+// Dashed lattice lines through the sub-point rows/columns (mirrors the
+// browser overlay when the project's pixelGridLines toggle is on).
+function _subGridLinesKml(lat, lon, coverSizeM, gridStr) {
+  const n = parseInt(gridStr) || 5;
+  const { dlat, dlon } = _metersToDeg(coverSizeM, lat);
+  const top = lat + dlat, bot = lat - dlat;
+  const left = lon - dlon, right = lon + dlon;
+  const style = '<Style><LineStyle><color>80ffffff</color><width>1</width></LineStyle></Style>';
+  let segs = '';
+  for (let i = 0; i < n; i++) {
+    const f = n > 1 ? i / (n - 1) : 0.5;
+    const y = top - 2 * dlat * f;
+    const x = left + 2 * dlon * f;
+    segs += `
+    <Placemark>${style}<LineString><coordinates>${left},${y},0 ${right},${y},0</coordinates></LineString></Placemark>
+    <Placemark>${style}<LineString><coordinates>${x},${top},0 ${x},${bot},0</coordinates></LineString></Placemark>`;
+  }
+  return segs;
+}
+
 function _subPointsKml(lat, lon, pixelMode) {
-  const { plotSizeM, subPointGrid, pixelInnerSizeM, subPointResults = [], selectedIdx } = pixelMode;
+  const { plotSizeM, subPointGrid, pixelInnerSizeM, pixelGridLines, subPointResults = [], selectedIdx } = pixelMode;
   // Optional buffer: the lattice spans a smaller centered box instead of the full UA square
   const inner = Number(pixelInnerSizeM) || 0;
   const coverSizeM = (inner > 0 && inner < plotSizeM) ? inner : plotSizeM;
-  return _subPointPositions(lat, lon, coverSizeM, subPointGrid).map(({ lat: sLat, lon: sLon, idx }) => {
+  const gridLines = pixelGridLines ? _subGridLinesKml(lat, lon, coverSizeM, subPointGrid) : '';
+  return gridLines + _subPointPositions(lat, lon, coverSizeM, subPointGrid).map(({ lat: sLat, lon: sLon, idx }) => {
     const result    = subPointResults.find(r => r.idx === idx);
     const isSelected = idx === selectedIdx;
     // orange (#f59e0b) for selected, class colour for classified, grey for unclassified

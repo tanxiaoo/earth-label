@@ -167,6 +167,7 @@ async function loadProject(id) {
     pointBoxSizeM:        proj.pointBoxSizeM ?? 30,
     subPointGrid:         proj.subPointGrid         || '5x5',
     pixelInnerSizeM:      proj.pixelInnerSizeM      ?? 0,
+    pixelGridLines:       proj.pixelGridLines       ?? false,
     cellGrid:             proj.cellGrid             || '3x3',
     gridInnerSizeM:       proj.gridInnerSizeM       ?? 0,
     aggregationRule:      proj.aggregationRule      || 'majority',
@@ -242,6 +243,7 @@ export function openCreateProjectModal() {
   _setGridSelectControls('createSubGrid',  'createSubGridCustomN',  '5x5');
   _setGridSelectControls('createCellGrid', 'createCellGridCustomN', '3x3');
   $('createPixelInnerSizeM').value = '0';
+  $('createPixelGridLines').checked = false;
   $('createGridInnerSizeM').value = '0';
   $('createAggRule').value     = 'majority';
   $('createAggThreshold').value = '50';
@@ -305,6 +307,7 @@ export async function createNewProject() {
   const boxM     = _parsePointBoxSize($('createPointBoxSizeM').value);
   const grid     = _readGridSelect('createSubGrid', 'createSubGridCustomN', '5x5');
   const pixInner = _parseGridInnerSize($('createPixelInnerSizeM').value, sizeM);
+  const pixLines = !!$('createPixelGridLines').checked;
   const cellGrid = _readGridSelect('createCellGrid', 'createCellGridCustomN');
   const innerM   = _parseGridInnerSize($('createGridInnerSizeM').value, sizeM);
   const aggRule  = $('createAggRule').value || 'majority';
@@ -316,6 +319,7 @@ export async function createNewProject() {
     pointBoxSizeM:        boxM,
     subPointGrid:         grid,
     pixelInnerSizeM:      pixInner,
+    pixelGridLines:       pixLines,
     cellGrid:             cellGrid,
     gridInnerSizeM:       innerM,
     aggregationRule:      aggRule,
@@ -365,6 +369,7 @@ export function openProjectSettings() {
   _setGridSelectControls('settingsSubGrid',  'settingsSubGridCustomN',  state.subPointGrid || '5x5');
   _setGridSelectControls('settingsCellGrid', 'settingsCellGridCustomN', state.cellGrid || '3x3');
   $('settingsPixelInnerSizeM').value = state.pixelInnerSizeM ?? 0;
+  $('settingsPixelGridLines').checked = !!state.pixelGridLines;
   $('settingsGridInnerSizeM').value = state.gridInnerSizeM ?? 0;
   $('settingsAggRule').value       = state.aggregationRule;
   $('settingsAggThreshold').value  = Math.round(state.aggregationThreshold * 100);
@@ -453,6 +458,7 @@ export async function saveProjectSettings() {
   const boxM     = _parsePointBoxSize($('settingsPointBoxSizeM').value);
   const grid     = _readGridSelect('settingsSubGrid', 'settingsSubGridCustomN', '5x5');
   const pixInner = _parseGridInnerSize($('settingsPixelInnerSizeM').value, sizeM);
+  const pixLines = !!$('settingsPixelGridLines').checked;
   const cellGrid = _readGridSelect('settingsCellGrid', 'settingsCellGridCustomN');
   const innerM   = _parseGridInnerSize($('settingsGridInnerSizeM').value, sizeM);
   const aggRule  = $('settingsAggRule').value || 'majority';
@@ -460,7 +466,8 @@ export async function saveProjectSettings() {
 
   const uaSettings = {
     assessmentMode: mode, plotSizeM: sizeM, pointBoxSizeM: boxM,
-    subPointGrid: grid, pixelInnerSizeM: pixInner, cellGrid, gridInnerSizeM: innerM,
+    subPointGrid: grid, pixelInnerSizeM: pixInner, pixelGridLines: pixLines,
+    cellGrid, gridInnerSizeM: innerM,
     aggregationRule: aggRule, aggregationThreshold: aggPct,
   };
 
@@ -478,7 +485,8 @@ export async function saveProjectSettings() {
     await api.saveProjectSettings(state.project.id, uaSettings);
     setState({
       assessmentMode: mode, plotSizeM: sizeM, pointBoxSizeM: boxM,
-      subPointGrid: grid, pixelInnerSizeM: pixInner, cellGrid, gridInnerSizeM: innerM,
+      subPointGrid: grid, pixelInnerSizeM: pixInner, pixelGridLines: pixLines,
+      cellGrid, gridInnerSizeM: innerM,
       aggregationRule: aggRule, aggregationThreshold: aggPct,
     });
     // Patch local project object too
@@ -790,6 +798,7 @@ function _buildPixelModeForKml(plotId) {
   } else {
     payload.subPointGrid    = state.subPointGrid;
     payload.pixelInnerSizeM = state.pixelInnerSizeM;
+    payload.pixelGridLines  = state.pixelGridLines;
   }
   return payload;
 }

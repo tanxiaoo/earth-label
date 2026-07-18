@@ -92,6 +92,7 @@ export const state = {
   pointBoxSizeM:        30,         // point mode: optional focus box, 0 = off
   subPointGrid:         '5x5',      // pixel mode: '2x2'…'5x5' or custom 'NxN' (2–20)
   pixelInnerSizeM:      0,          // pixel mode: sub-point lattice spans this inner box; 0 = full square (CEO standard)
+  pixelGridLines:       false,      // pixel mode: dashed lattice lines through the sub-points (display-only)
   cellGrid:             '3x3',      // grid mode: '2x2'…'5x5' or custom 'NxN' (2–20)
   gridInnerSizeM:       0,          // grid mode: cells tile this inner box; 0 = full square
   aggregationRule:      'majority', // 'majority' | 'threshold'
@@ -160,6 +161,7 @@ A project file in `data/projects/<id>.json`:
   "pointBoxSizeM":        30,         // point mode: optional focus box, 0 = off
   "subPointGrid":         "5x5",      // pixel mode: "2x2"…"5x5" or custom "NxN"
   "pixelInnerSizeM":      0,          // pixel mode: sub-point buffer inner box; 0 = full square
+  "pixelGridLines":       false,      // pixel mode: dashed lattice lines through the sub-points
   "cellGrid":             "3x3",      // grid mode: "2x2"…"5x5" or custom "NxN"
   "gridInnerSizeM":       0,          // grid mode: cell inner box; 0 = full square
   "aggregationRule":      "majority", // "majority" | "threshold"
