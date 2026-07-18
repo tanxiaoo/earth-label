@@ -293,7 +293,7 @@ export async function createNewProject() {
   errMsg('createError', '');
 
   const mode     = document.querySelector('input[name="createAssessMode"]:checked')?.value || 'point';
-  const sizeM    = parseInt($('createPlotSizeM').value) || 30;
+  const sizeM    = parseFloat($('createPlotSizeM').value) || 30;
   const boxM     = _parsePointBoxSize($('createPointBoxSizeM').value);
   const grid     = $('createSubGrid').value || '5x5';
   const cellGrid = $('createCellGrid').value || '3x3';
@@ -396,7 +396,7 @@ function _parseGridInnerSize(v, plotSizeM) {
 export async function saveProjectSettings() {
   if (!state.project) return;
   const mode     = $('settingsAssessMode').value;
-  const sizeM    = parseInt($('settingsPlotSizeM').value) || 30;
+  const sizeM    = parseFloat($('settingsPlotSizeM').value) || 30;
   const boxM     = _parsePointBoxSize($('settingsPointBoxSizeM').value);
   const grid     = $('settingsSubGrid').value || '5x5';
   const cellGrid = $('settingsCellGrid').value || '3x3';
