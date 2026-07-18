@@ -104,8 +104,9 @@ Choose how each plot entry will be classified. This is set at project creation a
 
 | Mode | When to use |
 |------|-------------|
-| **Point** | Your dataset is a set of geographic sample points. Each point gets one classification with a single click. No area boundary is shown on the map. |
+| **Point** | Your dataset is a set of geographic sample points. Each point gets one classification with a single click. An optional dashed focus box can be drawn around the point. |
 | **Pixel / Plot (CEO)** | Your dataset is pixel centres from a map product (e.g. Landsat CDL at 30 m, Sentinel-2 at 10 m). A Unit of Assessment (UA) square matching the pixel footprint is shown; a sub-point grid inside it is classified point-by-point; the sub-point labels are aggregated to a single plot class. |
+| **Grid / Cells** | Like Pixel mode, but the UA square is divided into **cells** and each cell is labelled by its dominant cover. Because cells are areas (not points sitting on the pixel boundary), labels stay stable under small imagery/raster misalignment, and the per-class cell fractions give a clean 0–100% density per pixel — ideal for e.g. impervious-surface validation. |
 
 **Pixel / Plot settings** (only shown when Pixel mode is selected):
 
@@ -114,6 +115,15 @@ Choose how each plot entry will be classified. This is set at project creation a
 | **UA Size** | 10 m / 20 m / 30 m / 50 m / custom | Side length of the UA square in metres. Use 10 m for Sentinel-2, 30 m for Landsat / CDL. |
 | **Sub-point Grid** | 3×3 (9 pts) · 5×5 (25 pts) | Number of sample points placed uniformly inside the UA square. |
 | **Aggregation Rule** | Majority · Threshold % | How sub-point labels are combined into one plot label. *Majority*: the class with the most points wins. *Threshold*: a class must reach the set percentage to win, otherwise majority is used. |
+
+**Grid / Cells settings** (only shown when Grid mode is selected):
+
+| Setting | Options | Description |
+|---------|---------|-------------|
+| **UA Size** | 10 m / 20 m / 30 m / 50 m / custom | Side length of the UA square (the target pixel) in metres. |
+| **Cell Grid** | 2×2 (4) · 3×3 (9) · 4×4 (16) · 5×5 (25) · Custom N×N | Number of cells the square is divided into. *Custom* accepts any side length from 2 to 20 (e.g. 8 → 8×8 = 64 cells). |
+| **Inner Grid Size** | 0 = full pixel (default) · custom metres | Optional: tile the cells inside a smaller centered box (e.g. 9 m inside a 10 m pixel) to keep a buffer from the pixel edges. With 0 the cells cover the full pixel, so class percentages correspond exactly to the pixel area. |
+| **Aggregation Rule** | Majority · Threshold % | Same as Pixel mode, applied to cell labels. |
 
 All settings are saved with the project and can be edited without losing existing results via **⚙ UA** in the sidebar.
 
@@ -192,6 +202,17 @@ All settings are saved with the project and can be edited without losing existin
 9. Click **Submit Plot & Next →** (or **Enter**) to save and advance.
 
 The **Reference** badge shows the map-product label for this pixel. If your CSV uses `ref_code` / `ref_label` columns they are used directly; columns named `cdl_label_code` / `cdl_label_name` are also recognised as a fallback so USDA CDL sample files work without renaming.
+
+### Grid / Cells Mode
+
+Works exactly like Pixel mode, but you label **cells** instead of sub-points:
+
+1. Navigate to a plot — the dashed orange UA square (the target pixel) appears, tiled by the configured cell grid (white grid lines). If an **Inner Grid Size** is set, the cells sit in a smaller centered box, leaving a visible buffer ring inside the pixel boundary.
+2. Cell colours: **transparent with white lines** = not yet classified; **translucent class colour** = classified; **orange outline** = currently active.
+3. The right panel header shows **Cell X of N** with the same progress dots as Pixel mode.
+4. Click a cell on the map to select it, or let the app auto-select the next unclassified one; classify with a class button or keyboard shortcut. Judge each cell by its **dominant cover**.
+5. After all cells are labelled the header shows the aggregated plot class; **Submit Plot & Next →** saves.
+6. The CSV export includes `cell_class_pct_json` — the per-class cover percentage of the pixel (e.g. impervious density 0–100%).
 
 > **Changing UA settings mid-project** — use **⚙ UA** in the sidebar. Changes apply to all new navigations; existing classified plots are unaffected.
 

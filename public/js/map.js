@@ -5,10 +5,10 @@ let _onSubPointClick = null;   // registered by app.js
 
 export function registerSubPointClickHandler(fn) { _onSubPointClick = fn; }
 
-// Size suffix for the coord readout: UA square in pixel mode, focus box in
-// point mode. Empty when the point-mode box is off.
+// Size suffix for the coord readout: UA square in pixel/grid mode, focus box
+// in point mode. Empty when the point-mode box is off.
 function _boxSizeSuffix() {
-  const m = state.assessmentMode === 'pixel'
+  const m = (state.assessmentMode === 'pixel' || state.assessmentMode === 'grid')
     ? Number(state.plotSizeM) || 0
     : Number(state.pointBoxSizeM) || 0;
   return m > 0 ? ` | ${m} m` : '';
@@ -17,7 +17,7 @@ let markerL, squareL, markerR, squareR;
 let layerL, layerR;
 let geomLayer = null;  // polygon/geometry overlay
 
-// Sub-point marker layers (pixel mode)
+// Sub-point marker / cell rectangle layers (pixel & grid modes), indexed by idx
 let subPointLayersL = [];
 let subPointLayersR = [];
 
@@ -131,6 +131,33 @@ function generateSubPointPositions(centerLat, centerLon, sizeM, gridStr) {
   return positions;
 }
 
+// Grid mode: the side (m) of the box the cells span — the optional inner box
+// when set and smaller than the UA square, otherwise the full UA square.
+export function gridCoverSizeM() {
+  const plot  = Number(state.plotSizeM) || 30;
+  const inner = Number(state.gridInnerSizeM) || 0;
+  return (inner > 0 && inner < plot) ? inner : plot;
+}
+
+// Generate the {bounds, idx} rectangles for the cell grid. Cells tile the
+// coverSizeM box edge-to-edge; idx is row-major from the top-left, matching
+// the sub-point convention.
+function generateCellBounds(centerLat, centerLon, coverSizeM, gridStr) {
+  const n = parseInt(gridStr) || 3; // "3x3" → 3
+  const { dlat, dlon } = metersToDeg(coverSizeM, centerLat);
+  const cells = [];
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      const north = centerLat + dlat * (1 - 2 * r / n);
+      const south = centerLat + dlat * (1 - 2 * (r + 1) / n);
+      const west  = centerLon + dlon * (-1 + 2 * c / n);
+      const east  = centerLon + dlon * (-1 + 2 * (c + 1) / n);
+      cells.push({ bounds: [[south, west], [north, east]], idx: r * n + c });
+    }
+  }
+  return cells;
+}
+
 // ── Navigate to plot ──────────────────────────────────────────────────────
 export function navigateToPlot(plot) {
   const zoom = state.isFirstPlotLoad ? 19 : mapL.getZoom();
@@ -140,10 +167,10 @@ export function navigateToPlot(plot) {
   // Remove previous layers
   _clearPlotLayers();
 
-  const isPixel = state.assessmentMode === 'pixel';
-
-  if (isPixel) {
+  if (state.assessmentMode === 'pixel') {
     _renderPixelPlot(plot);
+  } else if (state.assessmentMode === 'grid') {
+    _renderGridPlot(plot);
   } else {
     _renderPointPlot(plot);
   }
@@ -249,13 +276,74 @@ function _subPointStyle(idx, spResult, cls) {
   return { radius:4, color:'rgba(255,255,255,0.5)', weight:1, fillColor:'#111', fillOpacity:1 };
 }
 
-// Refresh one sub-point's visual (call after classifying it)
+// Grid mode: UA square (pixel footprint) + clickable cell rectangles
+function _renderGridPlot(plot) {
+  const { dlat, dlon } = metersToDeg(state.plotSizeM, plot.lat);
+
+  // UA square (yellow, dashed) — the target pixel boundary. Non-interactive
+  // so clicks in the buffer ring (when an inner box is set) hit nothing.
+  const rect = [
+    [plot.lat - dlat, plot.lon - dlon],
+    [plot.lat + dlat, plot.lon + dlon],
+  ];
+  const rectStyle = { color:'#f59e0b', weight:2, fillOpacity:0, dashArray:'5,5', interactive:false };
+  squareL = L.rectangle(rect, rectStyle).addTo(mapL);
+  squareR = L.rectangle(rect, rectStyle).addTo(mapR);
+
+  // Center marker (blue dot)
+  const dotStyle = { radius:5, color:'#fff', weight:2, fillColor:'#3b82f6', fillOpacity:.9, interactive:false };
+  markerL = L.circleMarker([plot.lat, plot.lon], dotStyle).addTo(mapL);
+  markerR = L.circleMarker([plot.lat, plot.lon], dotStyle).addTo(mapR);
+
+  _renderCells(plot);
+}
+
+// Draw the cell rectangles; colour them if already classified
+function _renderCells(plot) {
+  const cells       = generateCellBounds(plot.lat, plot.lon, gridCoverSizeM(), state.cellGrid);
+  const plotResults = (state.subPointResults[plot.id] || {});
+  const schema      = state.project?.classSchema || [];
+
+  cells.forEach(({ bounds, idx }) => {
+    const result = plotResults[idx];
+    const cls    = result ? schema.find(c => String(c.code) === String(result.code)) : null;
+
+    const styleL = _cellStyle(idx, result, cls);
+    const styleR = { ...styleL };
+
+    const cL = L.rectangle(bounds, styleL).addTo(mapL);
+    const cR = L.rectangle(bounds, { ...styleR, interactive:false }).addTo(mapR);
+
+    cL.on('click', () => { if (_onSubPointClick) _onSubPointClick(idx); });
+
+    subPointLayersL.push(cL);
+    subPointLayersR.push(cR);
+  });
+}
+
+function _cellStyle(idx, result, cls) {
+  const isSelected = idx === state.selectedSubPointIdx;
+  if (isSelected) {
+    // Highlighted (currently active) — orange border + light orange wash
+    return { color:'#f59e0b', weight:3, fillColor:'#f59e0b', fillOpacity:.18 };
+  }
+  if (result) {
+    // Classified — translucent class colour so the imagery stays readable
+    return { color:'rgba(255,255,255,0.75)', weight:1, fillColor: cls?.color || '#888', fillOpacity:.45 };
+  }
+  // Unclassified — white grid lines, nearly transparent fill
+  return { color:'rgba(255,255,255,0.65)', weight:1, fillColor:'#111', fillOpacity:.05 };
+}
+
+// Style for one sub-point marker or cell rectangle, by assessment mode
+function _unitStyle(idx, result, cls) {
+  return state.assessmentMode === 'grid'
+    ? _cellStyle(idx, result, cls)
+    : _subPointStyle(idx, result, cls);
+}
+
+// Refresh one sub-point's / cell's visual (call after classifying it)
 export function refreshSubPoint(plotId, idx) {
-  const positions   = generateSubPointPositions(
-    state.plots[state.currentIndex]?.lat,
-    state.plots[state.currentIndex]?.lon,
-    state.plotSizeM, state.subPointGrid
-  );
   const plotResults = state.subPointResults[plotId] || {};
   const schema      = state.project?.classSchema || [];
   const spResult    = plotResults[idx];
@@ -265,12 +353,12 @@ export function refreshSubPoint(plotId, idx) {
   const mR = subPointLayersR[idx];
   if (!mL || !mR) return;
 
-  const style = _subPointStyle(idx, spResult, cls);
+  const style = _unitStyle(idx, spResult, cls);
   mL.setStyle(style);
   mR.setStyle(style);
 }
 
-// Highlight the newly selected sub-point (deselect previous)
+// Highlight the newly selected sub-point / cell (deselect previous)
 export function highlightSubPoint(prevIdx, nextIdx) {
   const plot       = state.plots[state.currentIndex];
   if (!plot) return;
@@ -281,13 +369,15 @@ export function highlightSubPoint(prevIdx, nextIdx) {
   if (prevIdx != null && subPointLayersL[prevIdx]) {
     const pr  = plotResults[prevIdx];
     const cls = pr ? schema.find(c => String(c.code) === String(pr.code)) : null;
-    const st  = _subPointStyle(prevIdx, pr, cls);
+    const st  = _unitStyle(prevIdx, pr, cls);
     subPointLayersL[prevIdx].setStyle(st);
     subPointLayersR[prevIdx].setStyle(st);
   }
-  // Select next — keep the map fixed on the whole plot; only restyle the marker
+  // Select next — keep the map fixed on the whole plot; only restyle the layer
   if (nextIdx != null && subPointLayersL[nextIdx]) {
-    const hiStyle = { radius:5, color:'#fff', weight:2, fillColor:'#f59e0b', fillOpacity:1 };
+    const hiStyle = state.assessmentMode === 'grid'
+      ? { color:'#f59e0b', weight:3, fillColor:'#f59e0b', fillOpacity:.18 }
+      : { radius:5, color:'#fff', weight:2, fillColor:'#f59e0b', fillOpacity:1 };
     subPointLayersL[nextIdx].setStyle(hiStyle);
     subPointLayersR[nextIdx].setStyle(hiStyle);
   }

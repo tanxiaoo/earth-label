@@ -110,6 +110,8 @@ router.post('/json', (req, res) => {
     plotSizeM:            ua.plotSizeM            || 30,
     pointBoxSizeM:        ua.pointBoxSizeM        ?? 30,
     subPointGrid:         ua.subPointGrid         || '5x5',
+    cellGrid:             ua.cellGrid             || '3x3',
+    gridInnerSizeM:       ua.gridInnerSizeM       ?? 0,
     aggregationRule:      ua.aggregationRule      || 'majority',
     aggregationThreshold: ua.aggregationThreshold || 0.5,
   };
@@ -176,6 +178,8 @@ router.post('/', upload.single('file'), async (req, res) => {
     plotSizeM:            uaSettings.plotSizeM            || 30,
     pointBoxSizeM:        uaSettings.pointBoxSizeM        ?? 30,
     subPointGrid:         uaSettings.subPointGrid         || '5x5',
+    cellGrid:             uaSettings.cellGrid             || '3x3',
+    gridInnerSizeM:       uaSettings.gridInnerSizeM       ?? 0,
     aggregationRule:      uaSettings.aggregationRule      || 'majority',
     aggregationThreshold: uaSettings.aggregationThreshold || 0.5,
   };
@@ -220,6 +224,8 @@ router.patch('/:id', (req, res) => {
     if (uaSettings.plotSizeM            != null) proj.plotSizeM            = uaSettings.plotSizeM;
     if (uaSettings.pointBoxSizeM        != null) proj.pointBoxSizeM        = uaSettings.pointBoxSizeM;
     if (uaSettings.subPointGrid         != null) proj.subPointGrid         = uaSettings.subPointGrid;
+    if (uaSettings.cellGrid             != null) proj.cellGrid             = uaSettings.cellGrid;
+    if (uaSettings.gridInnerSizeM       != null) proj.gridInnerSizeM       = uaSettings.gridInnerSizeM;
     if (uaSettings.aggregationRule      != null) proj.aggregationRule      = uaSettings.aggregationRule;
     if (uaSettings.aggregationThreshold != null) proj.aggregationThreshold = uaSettings.aggregationThreshold;
   }
