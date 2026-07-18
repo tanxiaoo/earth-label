@@ -7,6 +7,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+---
+
+## [2.3.0] - 2026-07-18
+
 ### Added
 - **Grid / Cells assessment mode** (`assessmentMode: "grid"`): a third per-project mode alongside Point and Pixel. The UA square (the target pixel footprint, e.g. 10 m for Sentinel-2) is divided into a configurable cell grid (2×2 / 3×3 / 4×4 / 5×5 or a custom N×N from 2 to 20 per side, default 3×3) and each **cell** is classified by its dominant cover — instead of labelling single sub-points that can sit on the pixel boundary. Cells aggregate to a plot-level class with the existing majority/threshold rule. (`public/js/state.js`, `public/js/map.js`, `public/js/app.js`, `public/index.html`, `server/routes/projects.js`)
 - **Grid mode — optional inner box (buffer)** (`gridInnerSizeM`, default 0 = full pixel): cells tile the full UA square by default so the class percentages correspond exactly to the pixel area; optionally the cell grid can be drawn inside a smaller centered box (e.g. 9 m inside a 10 m pixel) to keep a buffer from the pixel edges against imagery/raster misalignment. (`public/js/map.js`, `public/js/app.js`, `public/index.html`)
@@ -15,6 +19,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Grid mode — GEP KML sync**: in grid mode `/kml/current.kml` renders one semi-transparent colour-coded polygon per cell (orange outline = selected) inside the UA square, mirroring the web UI. (`server/routes/kml.js`, `public/js/app.js`)
 - **Per-result assessment metadata**: every submitted result now stores the mode and grid geometry it was assessed with (`assessmentMode`, `uaSizeM`, `subPointGrid` / `cellGrid` + `cellCoverageM`), so exports stay truthful after settings changes. (`public/js/app.js`)
 - **Mixed-mode exports**: CSV/GeoJSON now emit `assessment_mode` per row (from the stored result) and include both the pixel and grid column blocks when a project contains results from both modes — each row filled from its own stored data instead of the current project setting. Per-unit column counts cover the largest stored result so no classified unit is dropped. (`public/js/export.js`)
+- **Tree canopy height readout** (merged via PR #6, previously unchangelogged): per-point canopy height from the ECHOSAT dataset (10 m, 2018–2024) via Google Earth Engine, shown in the NDVI panel relative to the MOLCA 5 m tree-height line; per-class description popups and pixel reclassification improvements. (`server/routes/canopy.js`, `server/lib/canopy_ee.py`, `public/js/ndvi-panel.js`, `public/js/class-descriptions.js`)
+- **Decimal UA size** (previously unchangelogged): the UA square side accepts decimal metres (e.g. `6.667`) in the create and settings modals — matches map products whose resolution is not a whole number. (`public/index.html`, `public/js/app.js`)
 
 ### Fixed
 - Changing the assessment mode or grid geometry mid-project no longer lets stale in-progress sub-point/cell labels be submitted under the new geometry (out-of-range indices, wrong density denominators): unsubmitted unit labels are reset on geometry changes, stored unit labels are restored for display/re-classification only when the result's stored geometry matches the current settings, and the header count, submit gate and aggregation all consider only units of the current geometry — eliminating both the enabled-but-dead Submit button and the reverse case where a completed plot from a larger old geometry could be silently resubmitted as the new one. (`public/js/app.js`, `public/index.html`)
