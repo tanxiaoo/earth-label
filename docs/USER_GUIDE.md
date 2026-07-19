@@ -194,7 +194,7 @@ All settings are saved with the project and can be edited without losing existin
 ### Pixel / Plot Mode (CEO)
 
 1. Navigate to a plot — the dashed orange square (the **UA**) appears on the map, sized exactly to the configured pixel footprint. A small label (e.g. `30 m`) shows below the square.
-2. Sub-point circles fill the UA square: **black dot** = not yet classified; **coloured dot** = classified with that class colour; **orange dot** = currently active.
+2. Sub-point circles fill the UA square: **black dot** = not yet classified; **coloured dot** = classified with that class colour; **orange dot** = currently active. With a **Sub-point Buffer** set, the lattice sits inside a faint dashed inner box instead of spanning the full square; with **Show grid lines** on, dashed lines connect the point rows and columns.
 3. The right panel header shows **Sub-point X of N** and a row of coloured progress dots.
 4. Click a sub-point circle on the map to select it, or the app auto-selects the next unclassified one.
 5. Press a class keyboard shortcut or click a class button — the selected sub-point is instantly classified, its circle fills with the class colour, and the next sub-point in index order is selected automatically.
