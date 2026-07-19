@@ -189,7 +189,7 @@ A project file in `data/projects/<id>.json`:
 - `results{}` grows as the user classifies; keyed by `plot.id`
 - `classSchema[]` can be edited at any time without breaking existing results (results reference codes)
 - `annotationFields[]` is editable at any time. Field `type` is `'text'` or `'binary'`. Binary values are stored as `'yes'`, `'no'`, or empty. **Backward compat:** projects without `annotationFields` default to `[{key:'notes',…}]`; legacy `result.notes` maps to `result.annotations.notes`.
-- UA fields (`assessmentMode`, `plotSizeM`, `subPointGrid`, `aggregationRule`, `aggregationThreshold`) are stored at the project root and are editable at any time via PATCH `/api/projects/:id` with `{uaSettings:{…}}`. **Backward compat:** projects without these fields default to `assessmentMode:'point'` on load.
+- UA fields (`assessmentMode`, `plotSizeM`, `pointBoxSizeM`, `subPointGrid`, `pixelInnerSizeM`, `pixelGridLines`, `cellGrid`, `gridInnerSizeM`, `aggregationRule`, `aggregationThreshold`) are stored at the project root and are editable at any time via PATCH `/api/projects/:id` with `{uaSettings:{…}}`. **Backward compat:** projects without these fields fall back to safe defaults on load (`assessmentMode:'point'`, full-square lattices, grid lines off).
 - In pixel mode, `result.subPoints[]` stores every individual sub-point classification. The aggregated `result.code` / `result.label` is the plot-level result derived by the configured aggregation rule.
 
 ---

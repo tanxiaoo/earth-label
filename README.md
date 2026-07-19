@@ -1,6 +1,6 @@
 # EarthLabel
 
-**Satellite Image Interpretation Platform — v2.2.0**
+**Satellite Image Interpretation Platform — v2.4.0**
 
 A self-hosted web app for satellite image interpretation and land-cover validation. Built as a lighter, faster alternative to Collect Earth Online with multi-source high-resolution imagery, dynamic class schemas, and GIS file support.
 
@@ -145,6 +145,7 @@ earth-label/
 │       ├── annotation-fields.js ← Per-project annotation inputs + editor
 │       ├── ndvi-panel.js      ← Floating NDVI time-series panel
 │       └── export.js          ← CSV / GeoJSON / project export
+├── test/                      ← Node test-runner specs (npm test)
 └── data/                      ← Local data (gitignored)
     ├── projects/              ← Project JSON files
     └── user_presets.json      ← Schemas saved as reusable presets
