@@ -187,6 +187,8 @@ Recognised columns on upload:
 | Reference code (optional)   | `ref_code` |
 | Reference label (optional)  | `ref_label` |
 
+Coordinates are assumed to be **WGS84 geographic — EPSG:4326 (lon/lat in decimal degrees)**. There is no CRS detection or reprojection on upload: CSV `lat`/`lon` (or `x`/`y`) values are read as decimal degrees, GeoJSON and KML/KMZ are WGS84 by their respective specs, and for shapefiles the `.prj` is ignored — so a shapefile in a projected CRS (e.g. UTM) must be reprojected to EPSG:4326 before upload.
+
 Header matching is **exact and case-insensitive** — `ref_code` and `REF_CODE` are both recognized, but variants like `molca_class`, `molca_class_2024`, or `class_code` are not. Any column whose header is not in the table above is preserved as plot metadata and round-trips into **both CSV and GeoJSON** exports. If your CSV uses a different name for the reference column, either rename it to `ref_code` / `ref_label` before upload, or accept that it will appear as a metadata column in exports rather than as the canonical reference column.
 
 ### Output (CSV download)
