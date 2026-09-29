@@ -633,7 +633,10 @@ export function goToPlot(index) {
     `Reference: <span style="color:${refColor}">${refText}</span>` +
     (userText ? `<br><span style="opacity:.85;">Your label: <span style="color:${userColor}">${userText}</span></span>` : '');
 
-  setState({ selectedClass: p.resultCode??null, selectedConfidence: p.confidence??null });
+  // Only a real level is pre-selected — a review's consensus row stores both
+  // labelers' confidences as text, which must not be resubmitted as the reviewer's.
+  const conf = ['High', 'Medium', 'Low'].includes(p.confidence) ? p.confidence : null;
+  setState({ selectedClass: p.resultCode??null, selectedConfidence: conf });
   renderAnnotationInputs(p);
   renderClassButtons();
   updateConfidenceUI();

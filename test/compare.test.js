@@ -86,12 +86,13 @@ test('merge rules for agreed plots keep both labelers\' info', () => {
   }) });
   const r = buildReview(A, B, { nameA: 'Ann', nameB: 'Bo' }).project.results[1];
 
-  assert.equal(r.confidence, 'Low');
+  // Both labelers' values are kept, named; identical values once.
+  assert.equal(r.confidence, 'Ann: High | Bo: Low');
   assert.equal(r.annotations.notes, 'Ann: dense canopy | Bo: maybe plantation');
   assert.equal(r.annotations.cloudy, 'yes');
   assert.equal(r.imageSource, 'Google');
-  assert.equal(r.imageDate, '2024-05 | 2023-11');
-  assert.equal(r.timeSpentSeconds, null);
+  assert.equal(r.imageDate, 'Ann: 2024-05 | Bo: 2023-11');
+  assert.equal(r.timeSpentSeconds, 'Ann: 12 | Bo: 30');
 });
 
 test('merge: one empty note takes the other; legacy top-level notes are read', () => {
@@ -258,4 +259,29 @@ test('compare by column in grid/pixel mode keeps the unit rules (partial, merged
   assert.deepEqual(rev.results['1'].subPoints.map(u => u.code), [13, 13, 13, 20]);
   assert.equal(rev.results['2'].code, 20);
   assert.equal(rev.results['3'], undefined);
+});
+
+test('uploaded-file columns: identical kept once, different kept per labeler', () => {
+  const withMeta = (name, metas) => {
+    const p = project(name, {});
+    p.plots = p.plots.map((pl, i) => ({ ...pl, meta: metas[i] }));
+    return p;
+  };
+  const A = withMeta('A', [
+    { tile: 'T1', imperv_level: '7/9', a_only: 'x' },
+    { tile: 'T2', imperv_level: '0/9' },
+    { tile: 'T3', imperv_level: '5/9' },
+    { tile: 'T4', imperv_level: '1/9' },
+  ]);
+  const B = withMeta('B', [
+    { tile: 'T1', imperv_level: '7/9', b_only: 'y' },
+    { tile: 'T2', imperv_level: '0/9' },
+    { tile: 'T3', imperv_level: '4/9' },   // differs → split for every plot
+    { tile: 'T4', imperv_level: '1/9' },
+  ]);
+  const rev = buildReview(A, B, { nameA: 'Xiao', nameB: 'Keerthana R.' }).project;
+  assert.deepEqual(rev.plots[0].meta, {
+    tile: 'T1', imperv_level_xiao: '7/9', imperv_level_keerthana_r: '7/9', a_only: 'x', b_only: 'y',
+  });
+  assert.deepEqual(rev.plots[2].meta, { tile: 'T3', imperv_level_xiao: '5/9', imperv_level_keerthana_r: '4/9' });
 });

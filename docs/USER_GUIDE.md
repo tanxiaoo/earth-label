@@ -237,7 +237,7 @@ Validation campaigns often label every point twice, by two people working indepe
 **2. The reviewer** clicks **⇄ Review** in the project list and, for each labeler, either uploads that `.json` file or picks a project already on this machine. Enter each labeler's name (default: their project name) and the reviewer's name (default: the review's name) — these names label the maps, the compare card and the export columns. **Compare by** chooses what is compared:
 
 - **Final class (EarthLabel label)** — the default: the class each labeler assigned in EarthLabel.
-- **Column: …** — a column from the uploaded point files that both projects share (e.g. labels made outside EarthLabel). Only the agree / disagree decision changes — everything else follows the same rules as the default: in pixel/grid mode, plots whose column values agree but whose sub-points / cells differ are **Partial**, the A / B / Final unit matrix is shown (the card says *Compared by column: …* and the A and B rows end with each labeler's column value), and agreed plots are merged the same way. The **Disagree** and **Partial** tabs list plots strictly by that status. Values are compared as numbers when both are numeric (`20` = `20.0`), otherwise as text ignoring case, and a value that names a class (by code or label) counts as that class, so `20` and `Forest` agree. The merged Final class is the class the value names; if it names none, the labelers' shared EarthLabel class (or the majority of the merged units). Agreed plots that still end up without a class are warned about and left for the reviewer. The export adds `compare_by`, `a_value`, `b_value`.
+- **Column: …** — a column from the uploaded point files that both projects share (e.g. labels made outside EarthLabel). Only the agree / disagree decision changes — everything else follows the same rules as the default: in pixel/grid mode, plots whose column values agree but whose sub-points / cells differ are **Partial**, the A / B / Final unit matrix is shown (the card says *Compared by column: …* and the A and B rows end with each labeler's column value), and agreed plots are merged the same way. The **Disagree** and **Partial** tabs list plots strictly by that status. Values are compared as numbers when both are numeric (`20` = `20.0`), otherwise as text ignoring case, and a value that names a class (by code or label) counts as that class, so `20` and `Forest` agree. The merged Final class is the class the value names; if it names none, the labelers' shared EarthLabel class (or the majority of the merged units). Agreed plots that still end up without a class are warned about and left for the reviewer. The export adds `compare_by`; the compared column itself is exported like any other file column (see step 4).
 
 **Compare** shows a preview without creating anything:
 
@@ -271,15 +271,19 @@ In point mode the matrix shows one class per row and each map's marker is tagged
 | Field | Merged value |
 |-------|--------------|
 | Class | the agreed class |
-| Confidence | the lower of the two |
 | Text annotation | identical → kept; one empty → the other; different → `<A project>: … \| <B project>: …` |
 | Yes/No annotation | `yes` if either said yes |
-| Image source / date | identical → kept; different → `A-value \| B-value` |
-| Time spent | empty (both originals are in `a_time_spent_s` / `b_time_spent_s`) |
+| Confidence, image source, image date, time spent | both labelers' values, named: `xiao: ESRI \| keerthana: Google`, `xiao: 42 \| keerthana: 30`; identical values once |
 | Units (units differ) | shared units kept; differing units from the labeler whose units back the agreed class more (ties → A) |
 
-**4. Export.** The review's **↓ CSV** / **↓ GeoJSON** contain every point once with the final class, followed at the end of each row by:
-`agreement` (the original A-vs-B status — never changes), `unit_agreement_pct`, `resolved_by` (`consensus` / `A` / `B` / `reviewer`), `reviewer`, `labeler_a`, `labeler_b`, then `a_class_code`, `a_class_label`, `a_confidence`, `a_image_source`, `a_image_date`, `a_time_spent_s`, `a_<annotation>`, `a_units_json` and the same `b_*` columns.
+**4. Export.** The review's **↓ CSV** / **↓ GeoJSON** contain every point once:
+
+- **ID, LAT, LON** and the other fixed columns — once.
+- **EarthLabel values** — class, confidence, image source/date, time, sub-point / cell columns — are the **Final** only: the reviewer's own values for plots the reviewer labeled; for agreed plots the merged consensus, which keeps both labelers' confidence, imagery and time side by side (see the merge table above).
+- **Uploaded-file columns** of both labelers are merged: a column with identical values in both projects appears once; a column whose values differ appears twice, suffixed with each labeler's name (e.g. `imperv_level_xiao`, `imperv_level_keerthana`). A column only one project has is kept as it is.
+- At the end of each row: `labeler_a`, `labeler_b`, `a_class_code`, `a_class_label`, `b_class_code`, `b_class_label`, `unit_agreement_pct`, `resolved_by` (`consensus` / `reviewer`), `reviewer`, `compare_by` (column reviews only) and, last, **`agreement`** — the original A-vs-B status (`agree` / `agree_partial` / `disagree` / `missing_a` / `missing_b` / `missing_both`), which never changes.
+
+The merged file columns are fixed when the review is created, so recreate older reviews to get them.
 
 ---
 

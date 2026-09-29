@@ -218,9 +218,9 @@ Created by `POST /api/projects/review` from two labeling projects (A and B) buil
 }
 ```
 
-- `plots` = union of A's and B's plots (A's order first); `classSchema` = union by code (A's label wins); `annotationFields` = union by key; UA settings copied from A.
+- `plots` = union of A's and B's plots (A's order first); each plot's `meta` merges both labelers' uploaded-file columns (`_mergeMeta`: identical → once, differing → `<col>_<labeler>`); `classSchema` = union by code (A's label wins); `annotationFields` = union by key; UA settings copied from A.
 - `results` is pre-filled only for `agree` / `agree_partial` plots, with a merged result carrying `resolvedBy: "consensus"` (merge rules: `server/lib/compare.js`, documented in the User Guide §6b). Results the reviewer saves carry `resolvedBy: "A" | "B" | "reviewer"` and `reviewer`.
-- `review.items` is written once at creation and never modified — it is the lossless record of both labelers' originals and feeds the `agreement` / `a_*` / `b_*` export columns.
+- `review.items` is written once at creation and never modified — it is the lossless record of both labelers' originals and feeds the `agreement` / `a_class_*` / `b_class_*` export columns.
 - Frontend: `state.review` mirrors `project.review`. In a review the left map draws A's units, the right map B's, and the floating Final map window (`map.js` → `openFinalMap`) the reviewer's working units (`state.subPointResults`); see `_paneView` / `_paneUnits`. `state.selectedSubPointIdx` is shared by all three, and any selection or label change redraws them.
 
 ---

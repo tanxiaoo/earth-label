@@ -8,7 +8,6 @@ const UA_KEYS = [
 ];
 
 const COORD_TOL_DEG = 1e-6;
-const CONF_RANK = { low: 1, medium: 2, high: 3 };
 
 // A result counts as labeled only when it carries a class code.
 function _labeled(r) {
@@ -45,14 +44,6 @@ function _geometryKey(r, proj) {
   return `pixel|${r.subPointGrid ?? proj.subPointGrid ?? '5x5'}|${r.subPointCoverageM ?? ua}|${ua}`;
 }
 
-function _lowerConfidence(a, b) {
-  const ra = CONF_RANK[String(a ?? '').toLowerCase()];
-  const rb = CONF_RANK[String(b ?? '').toLowerCase()];
-  if (!ra) return rb ? b : null;
-  if (!rb) return a;
-  return ra <= rb ? a : b;
-}
-
 function _blank(v) {
   return v == null || String(v).trim() === '';
 }
@@ -85,12 +76,6 @@ function _mergeBinary(a, b) {
   if (a === 'yes' || b === 'yes') return 'yes';
   if (a === 'no'  || b === 'no')  return 'no';
   return '';
-}
-
-function _mergeJoined(a, b) {
-  if (_blank(a)) return _blank(b) ? null : b;
-  if (_blank(b) || String(a) === String(b)) return a;
-  return `${a} | ${b}`;
 }
 
 // Per-unit comparison of two unit arrays ({idx, code, label}).
@@ -139,11 +124,14 @@ function _mergeResults(rA, rB, fields, names, cmp) {
   const merged = {
     code:        rA.code,
     label:       rA.label || rB.label || '',
-    confidence:  _lowerConfidence(rA.confidence, rB.confidence),
+    // Consensus rows keep both labelers' values, named ("xiao: High |
+    // keerthana: Low"); identical values are written once. A row the
+    // reviewer labels is replaced by the reviewer's own values.
+    confidence:  _mergeText(rA.confidence, rB.confidence, names.A, names.B),
     annotations,
-    imageSource: _mergeJoined(rA.imageSource, rB.imageSource),
-    imageDate:   _mergeJoined(rA.imageDate,   rB.imageDate),
-    timeSpentSeconds: null,
+    imageSource: _mergeText(rA.imageSource, rB.imageSource, names.A, names.B),
+    imageDate:   _mergeText(rA.imageDate,   rB.imageDate,   names.A, names.B),
+    timeSpentSeconds: _mergeText(rA.timeSpentSeconds, rB.timeSpentSeconds, names.A, names.B),
     assessmentMode:   _modeOf(rA),
     resolvedBy:       'consensus',
   };
@@ -219,6 +207,48 @@ function _unionFields(a, b) {
   return out.length ? out : [{ key: 'notes', label: 'Notes', type: 'text' }];
 }
 
+// Column-name suffix for a labeler: "Keerthana R." → "keerthana_r".
+function _slug(name) {
+  return String(name).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+}
+
+// Merge A's and B's uploaded-file columns (plot.meta). A column whose values
+// are identical for every plot both have is kept once; a column that differs
+// anywhere is kept twice, suffixed with each labeler's name
+// (imperv_level_xiao / imperv_level_keerthana). Returns {plotId: meta}.
+function _mergeMeta(ids, plotsA, plotsB, names) {
+  const keys = [];
+  const seen = new Set();
+  for (const map of [plotsA, plotsB]) {
+    for (const p of map.values()) {
+      for (const k of Object.keys(p.meta || {})) if (!seen.has(k)) { seen.add(k); keys.push(k); }
+    }
+  }
+  const differs = new Set(keys.filter(k => ids.some(id => {
+    const a = plotsA.get(id)?.meta, b = plotsB.get(id)?.meta;
+    // Only a column both labelers have can differ; one-sided columns are kept as-is.
+    return a && b && k in a && k in b && String(a[k] ?? '').trim() !== String(b[k] ?? '').trim();
+  })));
+  let sA = _slug(names.A) || 'a', sB = _slug(names.B) || 'b';
+  if (sA === sB) { sA += '_a'; sB += '_b'; }
+
+  const out = {};
+  for (const id of ids) {
+    const mA = plotsA.get(id)?.meta || {}, mB = plotsB.get(id)?.meta || {};
+    const meta = {};
+    for (const k of keys) {
+      if (differs.has(k)) {
+        meta[`${k}_${sA}`] = mA[k] ?? '';
+        meta[`${k}_${sB}`] = mB[k] ?? '';
+      } else if (k in mA || k in mB) {
+        meta[k] = mA[k] ?? mB[k];
+      }
+    }
+    out[id] = meta;
+  }
+  return out;
+}
+
 // Warnings listing many plot ids are truncated so the modal stays readable.
 function _idList(ids) {
   const shown = ids.slice(0, 10).join(', ');
@@ -266,11 +296,14 @@ function buildReview(projA, projB, opts = {}) {
   const classSchema      = _unionSchema(projA.classSchema, projB.classSchema, warnings);
   const annotationFields = _unionFields(projA.annotationFields, projB.annotationFields);
 
-  // A's plot order first, then plots that only B has.
-  const plots = [
+  // A's plot order first, then plots that only B has. Uploaded-file columns
+  // of both labelers are merged (see _mergeMeta).
+  const basePlots = [
     ...projA.plots,
     ...projB.plots.filter(p => !plotsA.has(String(p.id))),
-  ].map(p => ({ ...p, geometry: p.geometry ?? null, meta: p.meta ?? {} }));
+  ];
+  const mergedMeta = _mergeMeta(basePlots.map(p => String(p.id)), plotsA, plotsB, names);
+  const plots = basePlots.map(p => ({ ...p, geometry: p.geometry ?? null, meta: mergedMeta[String(p.id)] }));
 
   // Sub-point / cell comparison of A's and B's EarthLabel results (pixel /
   // grid mode). Sets the item's unit fields; null when there are no
