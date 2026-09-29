@@ -180,11 +180,26 @@ export function renderCompareCard(plot) {
       (c ? ` → ${_chip({ code: c.code, label: c.label })}` : ' <span class="rv-none">(no class)</span>');
   };
 
+  // "Use" on the A / B rows labels the selected Final unit with that
+  // labeler's class for it (point mode: their class); the Final row gets an
+  // empty cell to stay aligned.
+  const useBtn = key => {
+    if (key === 'F') return '<span></span>';
+    // Point mode compared by a column: the class that labeler's value names.
+    const ok = multi ? !!rows.find(r => r.key === key)?.units[sel]
+             : compareBy ? item[`class${key}`] != null
+             : !!item[key];
+    const what = multi ? `${noun.toLowerCase()} ${sel + 1}` : 'the plot';
+    return `<button class="rv-use" ${ok ? '' : 'disabled'} tabindex="-1"
+              title="Label ${what} with ${_esc(labelerName(key))}'s class"
+              onmousedown="event.preventDefault()" onclick="app.useReviewSource('${key}')">Use</button>`;
+  };
+
   const matrix = rows.map(r => {
     if (compareBy && !multi && r.key !== 'F') {
       return `<div class="rv-mrow rv-value-row">
                 <div class="rv-mname" title="${_esc(r.name)}">${_esc(r.name)}</div>
-                <div class="rv-value">${valueHtml(r.key)}</div>
+                <div class="rv-value">${valueHtml(r.key)}</div>${useBtn(r.key)}
               </div>`;
     }
     const cells = multi
@@ -205,7 +220,7 @@ export function renderCompareCard(plot) {
       : `<span class="rv-sum">${_summary(r.units, total, r.code, r.label)}</span>`;
     return `<div class="rv-mrow${r.key === 'F' ? ' rv-final' : ''}">
               <div class="rv-mname" title="${_esc(r.name)}">${_esc(r.name)}</div>
-              <div class="rv-squares">${cells}</div>${sum}
+              <div class="rv-squares">${cells}</div>${sum || '<span></span>'}${useBtn(r.key)}
             </div>`;
   }).join('');
 

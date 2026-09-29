@@ -1242,6 +1242,30 @@ async function _submitPixelPlot() {
   _commitResult(plotIdx, result);
 }
 
+// Review: label the selected Final unit with the class labeler A or B gave
+// that unit, then advance like a class hotkey (point mode: pick their class).
+// Confidence stays the reviewer's own.
+export function useReviewSource(side) {
+  const p    = state.plots[state.currentIndex];
+  const item = p && state.review?.items?.[p.id];
+  if (!item) return;
+  if (!_isMultiUnit()) {
+    // Point mode: their class — or, compared by a column, the class their value names.
+    const code = state.review?.compareBy ? item[`class${side}`] : item[side]?.code;
+    if (code != null) selectClass(code);
+    return;
+  }
+  const src = item[side];
+  if (!src) return;
+  if (!_unitsMatchCurrentGeometry(src)) {
+    alert(`${side}'s ${_unitNoun()}s were drawn with a different grid than this review uses — they cannot be copied. Label them directly instead.`);
+    return;
+  }
+  const idx  = state.selectedSubPointIdx ?? 0;
+  const unit = (state.assessmentMode === 'grid' ? src.cells : src.subPoints).find(u => u.idx === idx);
+  if (unit) selectClass(unit.code);   // labels this unit and moves to the next
+}
+
 async function createReview() {
   const id = await submitCreateReview();
   if (id) await loadProject(id);
@@ -1378,7 +1402,7 @@ window.app = {
   setProjectSort, showProjectListView, deleteCurrentProject,
   importProjectFile, onImportProjectFile, exportProjectFile, loadDemoData,
   openCreateReviewModal, closeCreateReviewModal, compareReviewSources, createReview,
-  onReviewSourceChange,
+  onReviewSourceChange, useReviewSource,
   // Final map window: the image-source line tracks the window's imagery.
   openFinalMap:    () => { openFinalMap();    _updateImageSourceDisplay(); },
   closeFinalMap:   () => { closeFinalMap();   _updateImageSourceDisplay(); },
