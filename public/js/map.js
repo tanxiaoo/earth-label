@@ -75,6 +75,13 @@ export function getTileLayer(name, p1, p2) {
   return L.tileLayer('', { maxZoom:18 });
 }
 
+// Leaflet's keyboard handler treats keyCode 54 ('6') as a zoom-out alias for
+// the '-' key, and its addHooks sets tabIndex on the map container so the map
+// takes focus as soon as a cell is clicked. Class hotkeys are digits, so
+// pressing 6 to label both labelled the cell and zoomed the map out. Drop the
+// digit alias; the real '-' keys (189 / numpad 109 / Firefox 173) still zoom.
+L.Map.Keyboard.prototype.keyCodes.zoomOut = [189, 109, 173];
+
 // ── Init ─────────────────────────────────────────────────────────────────
 export function initMap() {
   mapL = L.map('map',      { center:[5,20], zoom:4, zoomControl:true });
