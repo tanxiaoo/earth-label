@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
 const { parseGIS } = require('../lib/gis-parser');
+const { buildReview } = require('../lib/compare');
 
 const DATA_DIR = path.join(__dirname, '../../data/projects');
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
@@ -69,6 +70,7 @@ router.get('/', (req, res) => {
         const p = JSON.parse(fs.readFileSync(path.join(DATA_DIR, f), 'utf8'));
         return {
           id: p.id, name: p.name, created: p.created, lastUsed: p.lastUsed,
+          type: p.type || 'labeling',
           plotCount: (p.plots || []).length,
           completedCount: Object.keys(p.results || {}).length,
         };
@@ -239,6 +241,54 @@ router.patch('/:id', (req, res) => {
 
   writeProj(proj);
   res.json({ success: true });
+});
+
+// POST /api/projects/review — compare labeler A's and B's projects and create
+// a review project for a third person. Each source is either an uploaded
+// project JSON (fileA / fileB) or a project already on this server
+// (projectIdA / projectIdB). dryRun=1 returns only { stats, warnings }.
+const reviewUpload = upload.fields([{ name: 'fileA', maxCount: 1 }, { name: 'fileB', maxCount: 1 }]);
+
+function _reviewSource(req, side) {
+  const file = req.files?.[`file${side}`]?.[0];
+  if (file) {
+    let proj;
+    try { proj = JSON.parse(file.buffer.toString('utf8')); }
+    catch { throw new Error(`Source ${side}: not a valid JSON file`); }
+    if (!proj.id || !proj.name || !Array.isArray(proj.plots)) {
+      throw new Error(`Source ${side}: not an EarthLabel project file`);
+    }
+    return proj;
+  }
+  const id = req.body[`projectId${side}`];
+  if (!id) throw new Error(`Source ${side} is missing — upload a project file or pick a project`);
+  if (!/^[\w-]+$/.test(id) || !fs.existsSync(projPath(id))) throw new Error(`Source ${side}: project not found`);
+  return readProj(id);
+}
+
+router.post('/review', reviewUpload, (req, res) => {
+  ensureDir();
+  let projA, projB, built;
+  try {
+    projA = _reviewSource(req, 'A');
+    projB = _reviewSource(req, 'B');
+    built = buildReview(projA, projB, {
+      name:     utf8(req.body.name || ''),
+      nameA:    utf8(req.body.nameA || ''),
+      nameB:    utf8(req.body.nameB || ''),
+      reviewer: utf8(req.body.reviewer || ''),
+      compareBy: utf8(req.body.compareBy || ''),
+    });
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
+  }
+  const { project, stats, warnings } = built;
+  if (req.body.dryRun === '1' || req.body.dryRun === 'true') return res.json({ stats, warnings });
+
+  const id = `proj_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  const now = new Date().toISOString();
+  writeProj({ id, ...project, created: now, lastUsed: now });
+  res.json({ id, stats, warnings });
 });
 
 // DELETE /api/projects/:id

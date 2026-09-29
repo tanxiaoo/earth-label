@@ -187,6 +187,59 @@
   </div>
 </div>
 
+<!-- CREATE REVIEW (double labeling) -->
+<div id="createReviewModal" class="modal-overlay hidden">
+  <div class="modal-content" style="max-width:520px;width:90vw;">
+    <h3>New Review — compare two labelers</h3>
+    <p style="font-size:12px;color:var(--text-dim);margin-bottom:12px;">
+      Each labeler exports their project (↓ in the plot list) from the same point file.
+      Plots where they disagree are left for you to resolve; agreed plots are merged automatically.
+    </p>
+
+    <label class="field-label">Review Name <span class="hint">optional</span></label>
+    <input type="text" id="reviewProjectName" class="field-input" placeholder="Review — A vs B">
+
+    <div class="rv-src-grid">
+      <div>
+        <label class="field-label" style="margin-top:12px;">Labeler A — project</label>
+        <select id="reviewSrcA" class="field-input" onchange="app.onReviewSourceChange('A','select')"></select>
+        <input type="file" id="reviewFileA" accept=".json" class="rv-file" onchange="app.onReviewSourceChange('A','file')">
+        <label class="field-label" style="margin-top:8px;">Labeler A — name</label>
+        <input type="text" id="reviewNameA" class="field-input" placeholder="defaults to project name">
+      </div>
+      <div>
+        <label class="field-label" style="margin-top:12px;">Labeler B — project</label>
+        <select id="reviewSrcB" class="field-input" onchange="app.onReviewSourceChange('B','select')"></select>
+        <input type="file" id="reviewFileB" accept=".json" class="rv-file" onchange="app.onReviewSourceChange('B','file')">
+        <label class="field-label" style="margin-top:8px;">Labeler B — name</label>
+        <input type="text" id="reviewNameB" class="field-input" placeholder="defaults to project name">
+      </div>
+    </div>
+
+    <label class="field-label" style="margin-top:12px;">Compare by
+      <span class="hint">default: the class labeled in EarthLabel</span>
+    </label>
+    <select id="reviewCompareBy" class="field-input" onchange="app.onReviewSourceChange()">
+      <option value="">Final class (EarthLabel label)</option>
+    </select>
+    <div id="reviewCompareByHint" style="font-size:11px;color:var(--text-dim);margin-top:4px;">
+      Pick both projects to list the uploaded-file columns they share.
+    </div>
+
+    <label class="field-label" style="margin-top:12px;">Reviewer name</label>
+    <input type="text" id="reviewReviewer" class="field-input" placeholder="defaults to the review name">
+
+    <div id="reviewPreview" style="margin-top:12px;"></div>
+    <div id="createReviewError" class="error-msg hidden" style="margin-top:8px;"></div>
+
+    <div class="modal-actions" style="margin-top:16px;">
+      <button class="basemap-btn" onclick="app.closeCreateReviewModal()">Cancel</button>
+      <button class="basemap-btn" onclick="app.compareReviewSources()">Compare</button>
+      <button class="submit-btn" style="padding:8px 20px;width:auto;" onclick="app.createReview()">Create review</button>
+    </div>
+  </div>
+</div>
+
 <!-- SETTINGS (API keys) -->
 <div id="settingsModal" class="modal-overlay hidden">
   <div class="modal-content" style="max-width:400px;">
@@ -483,6 +536,7 @@
       <div style="display:flex;gap:6px;">
         <button class="basemap-btn" style="padding:4px 10px;" onclick="app.importProjectFile()" title="Open project file">📂</button>
         <button class="basemap-btn" style="padding:4px 10px;" onclick="app.openCreateProjectModal()">+ New</button>
+        <button class="basemap-btn" style="padding:4px 10px;" onclick="app.openCreateReviewModal()" title="Compare two labelers' projects and resolve disagreements">⇄ Review</button>
       </div>
     </div>
     <div class="plot-list" id="projectListContainer"></div>
@@ -504,6 +558,7 @@
       <div style="margin-top:4px;">
         <span id="uaModeBadge" class="ua-mode-badge" style="display:none;"></span>
       </div>
+      <div id="reviewStatsBadge" class="rv-stats rv-off"></div>
     </div>
 
     <div class="progress-bar">
@@ -515,6 +570,8 @@
       <button class="filter-btn active" id="filter-all"     onclick="app.filterPlots('all')">All</button>
       <button class="filter-btn"        id="filter-pending" onclick="app.filterPlots('pending')">Pending</button>
       <button class="filter-btn"        id="filter-done"    onclick="app.filterPlots('done')">Done</button>
+      <button class="filter-btn rv-off" id="filter-disagree" onclick="app.filterPlots('disagree')" title="Disagreements and plots one labeler skipped">Disagree</button>
+      <button class="filter-btn rv-off" id="filter-partial"  onclick="app.filterPlots('partial')"  title="Same class, but some units differ">Partial</button>
       <button class="filter-btn" id="toggle-random-nav"
               style="margin-left:auto" title="Next-point order after Submit"
               onclick="app.toggleRandomNav()">Sequential</button>
@@ -581,6 +638,8 @@
              oninput="app.onGeRangeInput(this.value)">
       <span id="geRangeLabel" class="ge-range-label">1000 m</span>
     </div>
+    <button class="nav-btn final-map-btn" id="btn-final-map" onclick="app.openFinalMap()" disabled
+            title="Open the Final map window — available in review projects">🗺 Final map</button>
     <div class="plot-counter" id="plotCounter">–</div>
   </div>
 
@@ -617,6 +676,7 @@
           <option value="10">Oct</option><option value="11">Nov</option><option value="12">Dec</option>
         </select>
       </div>
+      <div class="review-pane-label rv-off" id="reviewPaneLabel-left"></div>
       <div id="map" class="inner-map"></div>
       <div class="coord-info" id="coordInfo">Click a plot to begin</div>
     </div>
@@ -653,6 +713,7 @@
           <option value="10">Oct</option><option value="11">Nov</option><option value="12">Dec</option>
         </select>
       </div>
+      <div class="review-pane-label rv-off" id="reviewPaneLabel-right"></div>
       <div id="mapRight" class="inner-map"></div>
       <div class="coord-info" id="coordInfoRight">Right Map</div>
     </div>
@@ -673,6 +734,9 @@
       <div class="sp-dots"></div>
     </div>
   </div>
+
+  <!-- A vs B compare card (review projects only) -->
+  <div id="reviewCompareCard" class="rv-card rv-off"></div>
 
   <div class="class-list" id="classList"></div>
 
@@ -708,6 +772,32 @@
       <button class="export-btn" onclick="app.exportGeoJSON()" style="flex:1;">↓ GeoJSON</button>
     </div>
   </div>
+</div>
+
+<!-- FINAL MAP WINDOW (review projects): the reviewer's Final labels -->
+<div id="finalMapWindow" class="final-map-window hidden" role="dialog" aria-label="Final labels map">
+  <div class="final-map-header" id="finalMapHeader">
+    <span id="finalMapTitle">Final</span>
+    <span class="final-map-hint"></span>
+    <button class="icon-btn" onclick="app.closeFinalMap()" title="Close">✕</button>
+  </div>
+  <div class="final-map-basemaps">
+    <select id="finalBasemap" class="mini-select" onchange="app.setFinalBasemap()" title="Basemap for the Final map">
+      <option value="google">Google</option>
+      <option value="esri">ESRI</option>
+      <option value="bing">Bing</option>
+      <option value="sentinel2">Sentinel-2</option>
+      <option value="planet">Planet</option>
+    </select>
+    <select id="finalYear"  class="mini-select" onchange="app.setFinalBasemap()" title="Year"></select>
+    <select id="finalMonth" class="mini-select" onchange="app.setFinalBasemap()" title="Month">
+      <option value="01">Jan</option><option value="02">Feb</option><option value="03">Mar</option>
+      <option value="04">Apr</option><option value="05">May</option><option value="06" selected>Jun</option>
+      <option value="07">Jul</option><option value="08">Aug</option><option value="09">Sep</option>
+      <option value="10">Oct</option><option value="11">Nov</option><option value="12">Dec</option>
+    </select>
+  </div>
+  <div id="finalMap" class="final-map"></div>
 </div>
 
 <!-- hidden file inputs for project import -->

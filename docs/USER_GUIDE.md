@@ -228,6 +228,61 @@ Each pane has its own basemap selector in its top-right corner. Common workflow:
 
 ---
 
+## 6b. Double Labeling & Review
+
+Validation campaigns often label every point twice, by two people working independently, and have a third person resolve the points where they disagree. EarthLabel supports this with **review projects**.
+
+**1. Labelers A and B** each create a normal project from the **same point file** (same plot IDs) and label it. When done, each clicks **↓** in the plot-list sidebar to download their project `.json` and sends it to the reviewer.
+
+**2. The reviewer** clicks **⇄ Review** in the project list and, for each labeler, either uploads that `.json` file or picks a project already on this machine. Enter each labeler's name (default: their project name) and the reviewer's name (default: the review's name) — these names label the maps, the compare card and the export columns. **Compare by** chooses what is compared:
+
+- **Final class (EarthLabel label)** — the default: the class each labeler assigned in EarthLabel.
+- **Column: …** — a column from the uploaded point files that both projects share (e.g. labels made outside EarthLabel). Only the agree / disagree decision changes — everything else follows the same rules as the default: in pixel/grid mode, plots whose column values agree but whose sub-points / cells differ are **Partial**, the A / B / Final unit matrix is shown (the card says *Compared by column: …* and the A and B rows end with each labeler's column value), and agreed plots are merged the same way. The **Disagree** and **Partial** tabs list plots strictly by that status. Values are compared as numbers when both are numeric (`20` = `20.0`), otherwise as text ignoring case, and a value that names a class (by code or label) counts as that class, so `20` and `Forest` agree. The merged Final class is the class the value names; if it names none, the labelers' shared EarthLabel class (or the majority of the merged units). Agreed plots that still end up without a class are warned about and left for the reviewer. The export adds `compare_by`, `a_value`, `b_value`.
+
+**Compare** shows a preview without creating anything:
+
+- agree / units differ / disagree / missing counts
+- percent agreement and Cohen's κ (over plots both labelers classified)
+- warnings: plot IDs only in one project, coordinates that differ, class codes that differ between the two schemas, plots assessed with a different mode or grid
+
+**Create review** builds the review project. Every plot gets a status:
+
+| Status | Meaning | Starts as |
+|--------|---------|-----------|
+| `agree` | Same class (and same units in pixel/grid mode) | resolved — merged automatically |
+| `agree_partial` | Same class, but some sub-points / cells differ | resolved — merged automatically; listed under **Partial** for optional review |
+| `disagree` | Different class | pending |
+| `missing_a` / `missing_b` / `missing_both` | One or both labelers skipped the plot | pending |
+
+The progress bar therefore counts the decisions left, and the review opens on the **Disagree** tab.
+
+**3. Resolving a plot.** The plot list has **All / Disagree / Partial** tabs, and each plot shows its status badge (Agree, Partial, Disagree, Missing). In a review the screen is laid out as:
+
+- **Left map = A**, **right map = B** (split view is always on; each map is labelled with the labeler's name). Every sub-point / cell is clickable in both maps.
+- **Right panel — compare matrix**: three rows, **A**, **B** and **Final**, with one coloured square per sub-point / cell (e.g. 9 for a 3×3 grid), each row ending with its class and how many units back it (e.g. `Forest 5/9`). Clicking a square — or a unit on any map — selects that unit everywhere (orange border) and the list below shows, colour first, which class A, B and Final gave it. Text annotations of both labelers are shown underneath.
+- **Final map window**: a floating map (drag it by its purple header, resize it from the corner) showing only your Final labels, with its own basemap / year selector. Open it with **🗺 Final map** in the toolbar (right of the Google Earth distance slider; greyed out outside review projects); it also opens by itself when you start labeling.
+
+To resolve, select a unit (in the Final window, on A's or B's map, or in the matrix) and press its **class hotkey** (or click the class); labeling advances to the next unit. When every Final unit is labeled (point mode: once a class is picked), **Submit**. While the Final window is open, the result's image source is the window's imagery.
+
+In point mode the matrix shows one class per row and each map's marker is tagged with that labeler's class; the Final window shows your pending class.
+
+**How agreed plots are merged** (nothing is lost — both originals are also exported):
+
+| Field | Merged value |
+|-------|--------------|
+| Class | the agreed class |
+| Confidence | the lower of the two |
+| Text annotation | identical → kept; one empty → the other; different → `<A project>: … \| <B project>: …` |
+| Yes/No annotation | `yes` if either said yes |
+| Image source / date | identical → kept; different → `A-value \| B-value` |
+| Time spent | empty (both originals are in `a_time_spent_s` / `b_time_spent_s`) |
+| Units (units differ) | shared units kept; differing units from the labeler whose units back the agreed class more (ties → A) |
+
+**4. Export.** The review's **↓ CSV** / **↓ GeoJSON** contain every point once with the final class, followed at the end of each row by:
+`agreement` (the original A-vs-B status — never changes), `unit_agreement_pct`, `resolved_by` (`consensus` / `A` / `B` / `reviewer`), `reviewer`, `labeler_a`, `labeler_b`, then `a_class_code`, `a_class_label`, `a_confidence`, `a_image_source`, `a_image_date`, `a_time_spent_s`, `a_<annotation>`, `a_units_json` and the same `b_*` columns.
+
+---
+
 ## 7. Editing the Class Schema
 
 Click the **✏** icon in the right panel header.
@@ -321,6 +376,7 @@ Shortcuts are disabled while typing in input fields (notes, search, etc.).
 - Switch between projects: click **← Projects** at the top of the plot list, then click another project
 - Last-opened project is restored automatically on next launch
 - Share a project: click **↓** (sidebar) to download the JSON, send it; the recipient clicks **📂** to import
+- Two labelers + a reviewer: see section 6b (Double Labeling & Review)
 
 ---
 

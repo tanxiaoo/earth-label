@@ -35,6 +35,9 @@ export const state = {
   selectedSubPointIdx:  null,    // idx of the currently active sub-point / cell
   subPointResults:      {},      // {plotId: {idx: {code, label}}}
 
+  // ── Double-labeling review (only for projects with type === 'review') ──
+  review:     null,                        // project.review: labelers, items, stats, warnings
+
   // ── Google Earth Pro source tracking ──────────────────────────────────────
   gepActive: false,
   gepYear:   '',

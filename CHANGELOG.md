@@ -7,6 +7,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- **Double labeling & review projects**: two labelers label the same point file independently; a third person creates a review project (**⇄ Review** in the project list) from both labelers' exported project `.json` files or from projects already on the machine. Every plot is flagged `agree` / `agree_partial` (same class, units differ) / `disagree` / `missing_a` / `missing_b` / `missing_both`; agreed plots are merged automatically and the reviewer resolves the rest. A dry-run **Compare** previews counts, percent agreement, Cohen's κ and warnings (plot-ID, coordinate, schema and grid mismatches). (`server/lib/compare.js`, `server/routes/projects.js`)
+- **Reviewer UI**: left map = labeler A, right map = labeler B (units clickable in both); a compare matrix in the right panel with rows A / B / Final, one coloured square per sub-point / cell and each row's class + count (e.g. `Forest 5/9`) — selecting a unit shows the class A, B and Final gave it; a floating, draggable, resizable **Final map** window (toolbar button **🗺 Final map**) with its own basemap/year selector for labeling the Final units with the class hotkeys. Plot list: **All / Disagree / Partial** tabs and a status badge per plot; agreement banner with κ. (`public/js/review.js`, `public/js/app.js`, `public/js/map.js`, `public/index.html`, `public/css/app.css`)
+- **Review export**: the review's CSV / GeoJSON has one row per point with the final class, followed at the end by `agreement`, `unit_agreement_pct`, `resolved_by`, `reviewer`, `labeler_a`, `labeler_b` and both labelers' originals as `a_*` / `b_*` columns. (`public/js/export.js`)
+- **Compare by column**: a review compares the EarthLabel class by default, or — chosen in the New Review modal — any uploaded-file column both projects share (e.g. labels made outside EarthLabel). Only the agree/disagree decision uses the column — the sub-point/cell comparison (Partial), unit matrix and merging work exactly as in the default mode. Values that name a class (by code or label) count as that class; export adds `compare_by`, `a_value`, `b_value`. (`server/lib/compare.js`, `public/js/review.js`, `public/js/export.js`)
+- **Tests** for the comparison, merge rules and κ. (`test/compare.test.js`)
+
+### Fixed
+- Google Earth Pro sync in reviews follows the Final labels: point-mode placemarks show the Final class (`Final: …`) and update as soon as a class is picked; on plot change the KML is sent after the first unit is auto-selected, so the selected-cell highlight is current. (`public/js/app.js`)
+- Pixel/grid plot summary: the "Aggregated: …" line in the reference badge now updates when units of an already-summarized plot are re-classified, instead of keeping the first value. (`public/js/app.js`)
+
 ---
 
 ## [2.4.0] - 2026-07-18

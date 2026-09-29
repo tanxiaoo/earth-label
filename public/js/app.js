@@ -3,7 +3,13 @@ import * as api from './api.js';
 import { initMap, navigateToPlot, setMapLayer, switchBasemap, toggleSplitView,
          updateEsriYear, updateSentinel2Year, updatePlanetParams,
          highlightSubPoint, refreshSubPoint, gridCoverSizeM, pixelCoverSizeM,
-         registerSubPointClickHandler } from './map.js';
+         registerSubPointClickHandler, redrawPlotOverlays,
+         openFinalMap, closeFinalMap, isFinalMapOpen,
+         setFinalBasemap, finalImageSource } from './map.js';
+import { isReviewProject, matchesReviewFilter, reviewBadgeHtml,
+         renderReviewChrome, renderCompareCard,
+         openCreateReviewModal, closeCreateReviewModal, compareReviewSources,
+         submitCreateReview, onReviewSourceChange } from './review.js';
 import { renderClassButtons, openClassEditor, closeClassEditor, saveClassSchema,
          saveSchemaAsPreset, addEditorClass, applyEditorPreset, exportClassSchema,
          importClassSchema, renderSchemaPreview } from './classes.js';
@@ -114,7 +120,7 @@ async function refreshProjectList() {
     div.onclick = () => loadProject(p.id);
     div.innerHTML = `
       <div class="plot-info">
-        <div class="plot-id" style="font-size:14px;font-family:'DM Sans',sans-serif;">${p.name}</div>
+        <div class="plot-id" style="font-size:14px;font-family:'DM Sans',sans-serif;">${p.name}${p.type === 'review' ? ' <span class="rv-project-badge">REVIEW</span>' : ''}</div>
         <div class="plot-label">${p.completedCount} / ${p.plotCount} plots · ${pct}%</div>
       </div>
       <div style="width:48px;height:4px;background:#2a2d3a;border-radius:2px;overflow:hidden;">
@@ -172,10 +178,25 @@ async function loadProject(id) {
     gridInnerSizeM:       proj.gridInnerSizeM       ?? 0,
     aggregationRule:      proj.aggregationRule      || 'majority',
     aggregationThreshold: proj.aggregationThreshold || 0.5,
+    review:               proj.type === 'review' ? proj.review : null,
   });
 
   // Restore sub-point (pixel mode) / cell (grid mode) results from saved data
   setState({ subPointResults: _rebuildUnitResults() });
+
+  // Reviews: A on the left map, B on the right — always split. Pending/Done
+  // tabs don't exist there, and review-only tabs never carry into a normal
+  // project. The Final window belongs to one review plot at a time.
+  const isReview = proj.type === 'review';
+  closeFinalMap();
+  if (isReview) {
+    setState({ currentFilter: 'disagree' });
+    if (!state.isSplitMode) toggleSplitView();
+  } else if (['disagree', 'partial'].includes(state.currentFilter)) {
+    setState({ currentFilter: 'all' });
+  }
+  _syncFilterTabs();
+  renderReviewChrome();
 
   localStorage.setItem('lastProjectId', id);
   $('activeProjectName').textContent = proj.name;
@@ -518,6 +539,8 @@ function renderPlotList({ keepScroll = false } = {}) {
     .filter(p => {
       if (state.currentFilter === 'pending') return !p.completed;
       if (state.currentFilter === 'done')    return  p.completed;
+      if (state.currentFilter === 'disagree' || state.currentFilter === 'partial')
+        return matchesReviewFilter(p.id, state.currentFilter);
       return true;
     })
     .sort((a,b) => String(a.id).localeCompare(String(b.id), undefined, { numeric:true }))
@@ -537,7 +560,9 @@ function renderPlotList({ keepScroll = false } = {}) {
           <div class="plot-id">Plot #${p.id}</div>
           <div class="plot-label">${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}</div>
         </div>
-        ${tagCls
+        ${isReviewProject()
+          ? reviewBadgeHtml(p.id)
+          : tagCls
           ? `<span class="plot-molca-badge" style="background:${tagCls.color}">${tagCls.label}</span>`
           : (fallbackLabel ? `<span class="plot-molca-badge" style="background:#555;color:#fff">${fallbackLabel}</span>` : '')}`;
       list.appendChild(div);
@@ -563,10 +588,15 @@ export function filterPlots(type) {
   // Remember where the user was in the tab they're leaving.
   if (list) state.filterScroll[state.currentFilter] = list.scrollTop;
   setState({ currentFilter: type });
-  ['all','pending','done'].forEach(t => $(`filter-${t}`)?.classList.toggle('active', t===type));
+  _syncFilterTabs();
   renderPlotList({ keepScroll: true });
   // Restore the entered tab's remembered position (top/first-by-ID the first time).
   if (list) list.scrollTop = state.filterScroll[type] || 0;
+}
+
+function _syncFilterTabs() {
+  ['all','pending','done','disagree','partial'].forEach(t =>
+    $(`filter-${t}`)?.classList.toggle('active', t === state.currentFilter));
 }
 
 export function setRandomNav(on) {
@@ -587,7 +617,6 @@ export function goToPlot(index) {
   setState({ isFirstPlotLoad: false });
 
   _startTimer();
-  _syncKml(p);
   _updateImageSourceDisplay();
 
   const schema    = state.project?.classSchema || [];
@@ -613,6 +642,7 @@ export function goToPlot(index) {
   $('plotCounter').textContent = `${index+1} / ${plots.length}`;
   renderPlotList();
   _updateClassifyPanelHeader();
+  renderCompareCard(p);
 
   if (state.ndviPanelOpen) renderNdviForCurrentPlot();
 
@@ -628,6 +658,8 @@ export function goToPlot(index) {
     }
     _updateSubPointProgress(p.id);
   }
+  // Last, so Google Earth Pro gets the selected class and auto-selected unit.
+  _syncKml(p);
 }
 
 export function nextPlot() {
@@ -692,6 +724,8 @@ function _readActiveImageSource() {
   if (state.gepActive) {
     return { source: 'Google Earth Pro', date: state.gepYear || '' };
   }
+  // Review: the Final labels are drawn on the Final map window's imagery.
+  if (isReviewProject() && isFinalMapOpen()) return finalImageSource();
   switch (state.leftBasemap) {
     case 'esri': {
       const year = document.getElementById('esri-year')?.value || '';
@@ -805,7 +839,17 @@ function _buildPixelModeForKml(plotId) {
 
 function _syncKml(p) {
   if (!p) return;
-  api.updateKML(p.lat, p.lon, p.id, p.refLabel || '', state.geRange, _buildPixelModeForKml(p.id));
+  api.updateKML(p.lat, p.lon, p.id, _kmlLabel(p), state.geRange, _buildPixelModeForKml(p.id));
+}
+
+// Point-mode placemark name: the reference label, or — in a review — the
+// Final class (picked but not yet submitted, else saved), like the Final map.
+function _kmlLabel(p) {
+  if (!isReviewProject()) return p.refLabel || '';
+  const schema = state.project?.classSchema || [];
+  const picked = schema.find(c => String(c.code) === String(state.selectedClass));
+  const label  = picked?.label || state.project.results?.[p.id]?.label;
+  return `Final: ${label || 'not labeled'}`;
 }
 
 export function onGeRangeInput(value) {
@@ -909,6 +953,13 @@ function _updateClassifyPanelHeader() {
     const done  = p ? _unitDone(p.id) : 0;
     const noun  = _unitNoun();
     const nounCap = noun.charAt(0).toUpperCase() + noun.slice(1);
+    if (isReviewProject()) {
+      // The A / B / Final matrix in the compare card replaces the dots.
+      subPtInfo.style.display = 'none';
+      header.textContent = `${nounCap} ${(state.selectedSubPointIdx ?? 0) + 1} of ${total} · Final ${done}/${total}`;
+      renderCompareCard(p);
+      return;
+    }
     subPtInfo.style.display = 'block';
     subPtInfo.innerHTML = `
       <div class="sp-progress-label">${nounCap}s: <strong>${done}/${total}</strong></div>
@@ -955,9 +1006,10 @@ function _showSubPointSummary(plotId) {
   const cls    = schema.find(c => String(c.code) === String(result.code));
   const ref    = $('molcaRef');
   if (ref) {
-    const existing = ref.innerHTML;
-    const summaryHtml = `<br><span style="opacity:.85;">Aggregated: <span style="color:${cls?.color||'#22c55e'}">${result.label}</span> (${result.pct}%)</span>`;
-    if (!existing.includes('Aggregated:')) ref.innerHTML += summaryHtml;
+    // Replace (not skip) an existing line so it tracks re-classified units.
+    ref.querySelector('.agg-line')?.remove();
+    ref.insertAdjacentHTML('beforeend',
+      `<span class="agg-line"><br><span style="opacity:.85;">Aggregated: <span style="color:${cls?.color||'#22c55e'}">${result.label}</span> (${result.pct}%)</span></span>`);
   }
   updateSubmitBtn();
 }
@@ -1002,10 +1054,24 @@ export function selectClass(code) {
   setState({ selectedClass: code });
   renderClassButtons();
   updateSubmitBtn();
+  if (isReviewProject()) {
+    // Point-mode review: show the pending Final class in the Final window
+    // and in Google Earth Pro.
+    _ensureFinalMapOpen();
+    redrawPlotOverlays(state.plots[state.currentIndex]);
+    renderCompareCard(state.plots[state.currentIndex]);
+    _syncKml(state.plots[state.currentIndex]);
+  }
+}
+
+// Review: labeling edits the Final layer — show it in its map window.
+function _ensureFinalMapOpen() {
+  if (isReviewProject() && !isFinalMapOpen()) { openFinalMap(); _updateImageSourceDisplay(); }
 }
 
 // ── Classification — Pixel / Grid Mode (sub-points / cells) ───────────────
 // Called when user clicks a sub-point circle or cell rectangle on the map
+// (in a review: on the A, B or Final map, or a square in the compare matrix).
 export function selectSubPoint(idx) {
   const prev = state.selectedSubPointIdx;
   setState({ selectedSubPointIdx: idx });
@@ -1019,6 +1085,7 @@ export function selectSubPoint(idx) {
 function _classifySubPoint(classCode) {
   const p   = state.plots[state.currentIndex];
   if (!p) return;
+  _ensureFinalMapOpen();
   const idx = state.selectedSubPointIdx ?? 0;
 
   const schema = state.project?.classSchema || [];
@@ -1090,7 +1157,6 @@ async function _submitPointPlot() {
   const schema  = state.project.classSchema || [];
   const cls     = schema.find(c => c.code === state.selectedClass);
   const plotIdx = state.currentIndex;
-  const plotId  = state.plots[plotIdx].id;
   const annotations = readAnnotationInputs();
   const { source: imageSource, date: imageDate } = _readActiveImageSource();
   const timeSpentSeconds = _stopTimer();
@@ -1103,15 +1169,26 @@ async function _submitPointPlot() {
     imageDate,
     timeSpentSeconds,
     assessmentMode: 'point',
+    ..._reviewStamp('reviewer'),
   };
+  _commitResult(plotIdx, result);
+}
 
+// Review projects record how each final label was reached and by whom.
+function _reviewStamp(resolvedBy) {
+  return isReviewProject() ? { resolvedBy, reviewer: state.review?.reviewer || '' } : {};
+}
+
+// Store a submitted result locally + on the server, then move on.
+function _commitResult(plotIdx, result) {
+  const plotId = state.plots[plotIdx].id;
   const plots = [...state.plots];
   plots[plotIdx] = { ...plots[plotIdx], resultCode:result.code, resultLabel:result.label,
-                     confidence:result.confidence, annotations, completed:true };
+                     confidence:result.confidence, annotations:result.annotations, completed:true };
   const results = { ...(state.project.results || {}),
                     [plotId]: { ...result, savedAt: new Date().toISOString() } };
   setState({ plots, project: { ...state.project, results },
-             selectedClass:null, selectedConfidence:null });
+             selectedClass:null, selectedConfidence:null, selectedSubPointIdx:null });
 
   clearAnnotationInputs();
   updateProgress();
@@ -1157,21 +1234,14 @@ async function _submitPixelPlot() {
     ...(state.assessmentMode === 'grid'
       ? { cellGrid: state.cellGrid, cellCoverageM: gridCoverSizeM(), cells: units }
       : { subPointGrid: state.subPointGrid, subPointCoverageM: pixelCoverSizeM(), subPoints: units }),
+    ..._reviewStamp('reviewer'),
   };
+  _commitResult(plotIdx, result);
+}
 
-  const plots = [...state.plots];
-  plots[plotIdx] = { ...plots[plotIdx], resultCode:result.code, resultLabel:result.label,
-                     confidence:result.confidence, annotations, completed:true };
-  const results = { ...(state.project.results || {}),
-                    [plotId]: { ...result, savedAt: new Date().toISOString() } };
-  setState({ plots, project: { ...state.project, results },
-             selectedClass:null, selectedConfidence:null, selectedSubPointIdx:null });
-
-  clearAnnotationInputs();
-  updateProgress();
-  renderPlotList();
-  api.saveResult(state.project.id, plotId, result).catch(console.error);
-  nextPlot();
+async function createReview() {
+  const id = await submitCreateReview();
+  if (id) await loadProject(id);
 }
 
 // ── Settings ──────────────────────────────────────────────────────────────
@@ -1304,6 +1374,12 @@ window.app = {
   onCreateAssessModeChange,
   setProjectSort, showProjectListView, deleteCurrentProject,
   importProjectFile, onImportProjectFile, exportProjectFile, loadDemoData,
+  openCreateReviewModal, closeCreateReviewModal, compareReviewSources, createReview,
+  onReviewSourceChange,
+  // Final map window: the image-source line tracks the window's imagery.
+  openFinalMap:    () => { openFinalMap();    _updateImageSourceDisplay(); },
+  closeFinalMap:   () => { closeFinalMap();   _updateImageSourceDisplay(); },
+  setFinalBasemap: () => { setFinalBasemap(); _updateImageSourceDisplay(); },
   goToPlot, nextPlot, prevPlot, filterPlots, toggleRandomNav, setRandomNav,
   toggleSplitView,
   switchBasemap:       (name)       => { switchBasemap(name);       _updateImageSourceDisplay(); },

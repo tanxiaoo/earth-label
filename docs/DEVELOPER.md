@@ -30,6 +30,7 @@ earth-label/
 │   ├── lib/
 │   │   ├── env-manager.js       .env read/write + legacy-format migration
 │   │   ├── class-presets.js     all 10 built-in LULC schemas
+│   │   ├── compare.js           double-labeling review: compare A vs B, merge, stats (pure)
 │   │   └── gis-parser.js        CSV / GeoJSON / KML / Shapefile → plot[]
 │   └── routes/
 │       ├── keys.js              /api/keys
@@ -47,6 +48,7 @@ earth-label/
 │       ├── classes.js            class-button rendering + class editor modal
 │       ├── annotation-fields.js  annotation-field sidebar inputs + editor modal
 │       ├── export.js             CSV / GeoJSON / project-file export
+│       ├── review.js             review projects: create modal, A-vs-B compare card, review chrome
 │       └── app.js                main entry, orchestration, keyboard shortcuts
 └── data/projects/               (gitignored) one .json file per project
 ```
@@ -192,6 +194,35 @@ A project file in `data/projects/<id>.json`:
 - UA fields (`assessmentMode`, `plotSizeM`, `pointBoxSizeM`, `subPointGrid`, `pixelInnerSizeM`, `pixelGridLines`, `cellGrid`, `gridInnerSizeM`, `aggregationRule`, `aggregationThreshold`) are stored at the project root and are editable at any time via PATCH `/api/projects/:id` with `{uaSettings:{…}}`. **Backward compat:** projects without these fields fall back to safe defaults on load (`assessmentMode:'point'`, full-square lattices, grid lines off).
 - In pixel mode, `result.subPoints[]` stores every individual sub-point classification. The aggregated `result.code` / `result.label` is the plot-level result derived by the configured aggregation rule.
 
+### Review projects (double labeling)
+
+Created by `POST /api/projects/review` from two labeling projects (A and B) built from the same point file. Same shape as a normal project — so loading, saving, progress and export all work unchanged — plus:
+
+```jsonc
+{
+  "type": "review",                       // absent / "labeling" for normal projects
+  "review": {
+    "labelers": { "A": { "name", "sourceProjectId", "sourceProjectName" }, "B": { … } },
+    "reviewer": "Cai",
+    "compareBy": null,                    // null = EarthLabel class; else an uploaded-file (plot.meta) column
+                                          // items then also carry valueA / valueB and classA / classB
+    "items": {                            // one per plot id
+      "1": { "status": "agree_partial",   // agree | agree_partial | disagree | missing_a | missing_b | missing_both
+             "A": { …A's result }, "B": { …B's result },
+             "unitAgreementPct": 75, "unitsComparable": true, "unitDiffIdx": [2] }
+    },
+    "stats": { "total", "bothLabeled", "agree", "agreePartial", "disagree",
+               "missingA", "missingB", "missingBoth", "agreementPct", "kappa" },
+    "warnings": [ "…" ]
+  }
+}
+```
+
+- `plots` = union of A's and B's plots (A's order first); `classSchema` = union by code (A's label wins); `annotationFields` = union by key; UA settings copied from A.
+- `results` is pre-filled only for `agree` / `agree_partial` plots, with a merged result carrying `resolvedBy: "consensus"` (merge rules: `server/lib/compare.js`, documented in the User Guide §6b). Results the reviewer saves carry `resolvedBy: "A" | "B" | "reviewer"` and `reviewer`.
+- `review.items` is written once at creation and never modified — it is the lossless record of both labelers' originals and feeds the `agreement` / `a_*` / `b_*` export columns.
+- Frontend: `state.review` mirrors `project.review`. In a review the left map draws A's units, the right map B's, and the floating Final map window (`map.js` → `openFinalMap`) the reviewer's working units (`state.subPointResults`); see `_paneView` / `_paneUnits`. `state.selectedSubPointIdx` is shared by all three, and any selection or label change redraws them.
+
 ---
 
 ## API Reference
@@ -222,6 +253,7 @@ User presets are stored in `data/user_presets.json` (gitignored) and merged with
 | POST   | `/api/projects/json`              | `{name, classSchema, annotationFields?, uaSettings?, plots}` | `{id}` |
 | POST   | `/api/projects/parse-file`        | `multipart` (`file`)                                   | `{plots, count}` |
 | POST   | `/api/projects/import`            | `multipart` (`file`: project json)                     | `{id}` |
+| POST   | `/api/projects/review`            | `multipart` (`fileA` / `projectIdA`, `fileB` / `projectIdB`, `name`?, `nameA`?, `nameB`?, `reviewer`?, `compareBy`?, `dryRun`?) | `{id, stats, warnings}` — `dryRun=1` returns `{stats, warnings}` without creating |
 | PATCH  | `/api/projects/:id`               | `{plotId?, result?, classSchema?, annotationFields?, uaSettings?, ndviCacheUpdate?, name?, lastUsed?}` | `{success:true}` |
 | DELETE | `/api/projects/:id`               | —                                                      | `{success:true}` |
 | GET    | `/api/projects/:id/export`        | —                                                      | downloads `.json` |

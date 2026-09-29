@@ -1,6 +1,11 @@
 // Central API client — all backend calls go through here
 
 async function _json(res) {
+  // A non-JSON reply (usually Express's HTML 404) means the running server
+  // doesn't know this route — typically it was started before an update.
+  if (!(res.headers.get('content-type') || '').includes('application/json')) {
+    throw new Error(`Server returned ${res.status} for ${new URL(res.url).pathname} — restart the server (npm start) if EarthLabel was just updated.`);
+  }
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
   return data;
@@ -51,6 +56,11 @@ export async function parseFile(file) {
   form.append('file', file);
   return fetch('/api/projects/parse-file', { method:'POST', body:form }).then(_json);
 }
+
+// Double-labeling review: form carries fileA/fileB or projectIdA/projectIdB,
+// plus name, nameA, nameB, reviewer, dryRun.
+export const createReview = (form) =>
+  fetch('/api/projects/review', { method:'POST', body:form }).then(_json);
 
 export async function importProject(file) {
   const form = new FormData();

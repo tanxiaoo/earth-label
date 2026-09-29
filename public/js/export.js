@@ -209,6 +209,60 @@ function _annoValue(plot, key) {
   return plot.annotations?.[key] ?? (key === 'notes' ? plot.notes ?? '' : '');
 }
 
+// ── Review columns (double-labeling review projects only) ────────────────
+// Appended at the very end of each row. `agreement` is the original A-vs-B
+// status and never changes; `resolved_by` says how the final label was reached
+// (consensus / A / B / reviewer). a_* / b_* keep both labelers' originals.
+function _reviewItem(plotId) {
+  return state.review?.items?.[plotId] || null;
+}
+
+function _reviewColumns(annoFields) {
+  if (state.project?.type !== 'review') return [];
+  const labeler = side => state.review?.labelers?.[side]?.name ?? '';
+  const src = (p, side) => _reviewItem(p.id)?.[side] || null;
+  const perSide = side => {
+    const s = side.toLowerCase();
+    return [
+      [`${s}_class_code`,   p => src(p, side)?.code        ?? ''],
+      [`${s}_class_label`,  p => src(p, side)?.label       ?? ''],
+      [`${s}_confidence`,   p => src(p, side)?.confidence  ?? ''],
+      [`${s}_image_source`, p => src(p, side)?.imageSource ?? ''],
+      [`${s}_image_date`,   p => src(p, side)?.imageDate   ?? ''],
+      [`${s}_time_spent_s`, p => src(p, side)?.timeSpentSeconds ?? ''],
+      ...annoFields.map(f => [`${s}_${f.key}`, p => {
+        const r = src(p, side);
+        if (!r) return '';
+        return r.annotations?.[f.key] ?? (f.key === 'notes' ? r.notes ?? '' : '');
+      }]),
+      [`${s}_units_json`, p => {
+        const r = src(p, side);
+        const units = r?.cells || r?.subPoints;
+        return units?.length ? JSON.stringify(units) : '';
+      }],
+    ];
+  };
+  return [
+    ['agreement',          p => _reviewItem(p.id)?.status ?? ''],
+    ['unit_agreement_pct', p => _reviewItem(p.id)?.unitAgreementPct ?? ''],
+    ['resolved_by',        p => _resultOf(p.id)?.resolvedBy ?? ''],
+    ['reviewer',           p => {
+      const r = _resultOf(p.id);
+      return r && r.resolvedBy !== 'consensus' ? (r.reviewer ?? '') : '';
+    }],
+    ['labeler_a',          () => labeler('A')],
+    ['labeler_b',          () => labeler('B')],
+    // Compared by an uploaded-file column: which one, and both values.
+    ...(state.review?.compareBy ? [
+      ['compare_by', () => state.review.compareBy],
+      ['a_value',    p => _reviewItem(p.id)?.valueA ?? ''],
+      ['b_value',    p => _reviewItem(p.id)?.valueB ?? ''],
+    ] : []),
+    ...perSide('A'),
+    ...perSide('B'),
+  ];
+}
+
 export function exportCSV() {
   const { plots } = state;
   if (!plots.length) return;
@@ -252,12 +306,14 @@ export function exportCSV() {
     ..._unitHeaders('cell', cellCount),
     ...annoFields.map(f => f.key),
   ];
-  const emittedColSet = new Set(emittedCols);
+  const reviewCols    = _reviewColumns(annoFields);
+  const emittedColSet = new Set([...emittedCols, ...reviewCols.map(([h]) => h)]);
   const tailMetaKeys  = metaKeys.filter(k => !emittedColSet.has(k));
 
   const header = [
     ...emittedCols,
     ...tailMetaKeys,
+    ...reviewCols.map(([h]) => h),
   ].join(',');
 
   const rows = plots.map(p => [
@@ -267,6 +323,7 @@ export function exportCSV() {
     ..._unitValues(p, 'cells', cellCount).map(_csvEscape),
     ...annoFields.map(f => _csvEscape(_annoValue(p, f.key))),
     ...tailMetaKeys.map(k => _csvEscape(p.meta?.[k])),
+    ...reviewCols.map(([, get]) => _csvEscape(get(p))),
   ].join(','));
 
   const filename = `${_safeName(state.project?.name)}_results.csv`;
@@ -336,10 +393,15 @@ export function exportGeoJSON() {
 
   // Meta first, computed props last — a re-imported export file carries our
   // own column names in meta, and the freshly computed values must win.
+  const reviewCols = _reviewColumns(_annoFields());
   const features = plots.map(p => ({
     type: 'Feature',
     geometry: p.geometry || { type: 'Point', coordinates: [p.lon, p.lat] },
-    properties: { ...(p.meta || {}), ..._geoJsonProps(p) },
+    properties: {
+      ...(p.meta || {}),
+      ..._geoJsonProps(p),
+      ...Object.fromEntries(reviewCols.map(([h, get]) => [h, get(p)])),
+    },
   }));
 
   _download(

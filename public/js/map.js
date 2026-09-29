@@ -23,6 +23,10 @@ let geomLayer = null;  // polygon/geometry overlay
 let subPointLayersL = [];
 let subPointLayersR = [];
 
+// Final map window (review projects only): created on first open
+let mapF = null, layerF = null, finalGroup = null;
+let subPointLayersF = [];
+
 // ── BingLayer ────────────────────────────────────────────────────────────
 const BingLayer = L.TileLayer.extend({
   getTileUrl(coords) {
@@ -182,9 +186,16 @@ export function navigateToPlot(plot) {
   const zoom = state.isFirstPlotLoad ? 19 : mapL.getZoom();
   mapL.setView([plot.lat, plot.lon], zoom);
   if (state.isSplitMode) mapR.setView([plot.lat, plot.lon], state.isFirstPlotLoad ? 19 : mapR.getZoom(), { animate:false });
+  if (isFinalMapOpen())  mapF.setView([plot.lat, plot.lon], mapF.getZoom(), { animate:false });
+  redrawPlotOverlays(plot);
+}
 
-  // Remove previous layers
+// Redraw the plot's overlays (marker, UA square, units) without moving the
+// map — used on navigation and, in reviews, whenever the selected unit or the
+// Final labels change (A, B and Final all show the selection).
+export function redrawPlotOverlays(plot) {
   _clearPlotLayers();
+  if (_isReview() && isFinalMapOpen()) _renderFinalFrame(plot);
 
   if (state.assessmentMode === 'pixel') {
     _renderPixelPlot(plot);
@@ -215,6 +226,84 @@ function _clearPlotLayers() {
   subPointLayersR.forEach(m => mapR.removeLayer(m));
   subPointLayersL = [];
   subPointLayersR = [];
+  finalGroup?.clearLayers();
+  subPointLayersF = [];
+}
+
+// ── Review projects: what each pane shows ─────────────────────────────────
+// Normal projects: both map panes show the working labels ("mine"). Review
+// projects: the left map shows labeler A, the right map labeler B, and the
+// reviewer's own (Final) labels live in the floating Final map window.
+function _isReview() {
+  return state.project?.type === 'review';
+}
+
+function _paneView(side) {
+  if (!_isReview()) return 'mine';
+  return side === 'left' ? 'A' : side === 'right' ? 'B' : 'mine';
+}
+
+function _reviewItem(plot) {
+  return state.review?.items?.[plot?.id] || null;
+}
+
+// Panes that draw units right now: { side, target, layers }. `target` is the
+// map (or the Final window's layer group) the units are added to.
+function _unitPanes() {
+  const panes = [
+    { side: 'left',  target: mapL, layers: subPointLayersL },
+    { side: 'right', target: mapR, layers: subPointLayersR },
+  ];
+  if (_isReview() && isFinalMapOpen()) panes.push({ side: 'final', target: finalGroup, layers: subPointLayersF });
+  return panes;
+}
+
+// { results, gridStr, coverM, editable } for the units a pane draws, or null
+// when that labeler's result has no units of this mode. A / B units use the
+// geometry stored with their result, so they still land where they were drawn.
+function _paneUnits(plot, side, mode) {
+  const view = _paneView(side);
+  if (view === 'mine') {
+    return {
+      results:  state.subPointResults[plot.id] || {},
+      gridStr:  mode === 'grid' ? state.cellGrid : state.subPointGrid,
+      coverM:   mode === 'grid' ? gridCoverSizeM() : pixelCoverSizeM(),
+      editable: true,
+    };
+  }
+  const r     = _reviewItem(plot)?.[view];
+  const units = mode === 'grid' ? r?.cells : r?.subPoints;
+  if (!Array.isArray(units)) return null;
+  const results = {};
+  units.forEach(u => { results[u.idx] = { code: u.code, label: u.label }; });
+  const ua = r.uaSizeM ?? state.plotSizeM;
+  return {
+    results,
+    gridStr:  mode === 'grid' ? (r.cellGrid ?? state.cellGrid) : (r.subPointGrid ?? state.subPointGrid),
+    coverM:   mode === 'grid' ? (r.cellCoverageM ?? ua) : (r.subPointCoverageM ?? ua),
+    editable: false,
+  };
+}
+
+// Point mode in a review: permanent tag on each pane's marker naming whose
+// label it shows ("Ann: Forest"), or the final label in the Final window.
+function _reviewTooltip(marker, plot, side) {
+  if (!_isReview()) return;
+  const view = _paneView(side);
+  let text;
+  if (view === 'mine') {
+    // The class picked but not yet submitted wins over the saved result.
+    const picked = (state.project.classSchema || []).find(c => String(c.code) === String(state.selectedClass));
+    const r = state.project.results?.[plot.id];
+    text = `Final: ${picked?.label || r?.label || '—'}`;
+  } else {
+    const item = _reviewItem(plot);
+    const name = state.review?.labelers?.[view]?.name || view;
+    // Compared by an uploaded-file column: tag with that labeler's value.
+    const value = state.review?.compareBy ? item?.[`value${view}`] : item?.[view]?.label;
+    text = `${name}: ${value ?? '—'}`;
+  }
+  if (text) marker.bindTooltip(text, { permanent:true, direction:'top', offset:[0,-8], className:'review-tip' });
 }
 
 // Point mode: center dot plus optional focus-box overlay
@@ -222,6 +311,8 @@ function _renderPointPlot(plot) {
   const dotStyle = { radius:6, color:'#fff', weight:2, fillColor:'#3b82f6', fillOpacity:.9 };
   markerL = L.circleMarker([plot.lat, plot.lon], dotStyle).addTo(mapL);
   markerR = L.circleMarker([plot.lat, plot.lon], dotStyle).addTo(mapR);
+  _reviewTooltip(markerL, plot, 'left');
+  _reviewTooltip(markerR, plot, 'right');
 
   const boxSize = Number(state.pointBoxSizeM) || 0;
   if (boxSize > 0) {
@@ -297,47 +388,55 @@ function _buildSubPointGridLines(centerLat, centerLon, coverSizeM, gridStr) {
   return L.featureGroup(lines);
 }
 
-// Draw sub-point circles; colour them if already classified. The lattice
-// spans pixelCoverSizeM() — the full UA square by default, or the buffered
-// inner box when pixelInnerSizeM is set.
-function _renderSubPoints(plot) {
-  const positions  = generateSubPointPositions(plot.lat, plot.lon, pixelCoverSizeM(), state.subPointGrid);
-  const plotResults = (state.subPointResults[plot.id] || {});
-  const schema      = state.project?.classSchema || [];
-
-  positions.forEach(({ lat, lon, idx }) => {
-    const spResult = plotResults[idx];
-    const cls      = spResult ? schema.find(c => String(c.code) === String(spResult.code)) : null;
-
-    const styleL = _subPointStyle(idx, spResult, cls);
-    const styleR = { ...styleL };
-
-    const mL = L.circleMarker([lat, lon], styleL).addTo(mapL);
-    const mR = L.circleMarker([lat, lon], styleR).addTo(mapR);
-
-    mL.on('click', () => { if (_onSubPointClick) _onSubPointClick(idx); });
-
-    subPointLayersL.push(mL);
-    subPointLayersR.push(mR);
-  });
+// Unit drawing options for a pane. Normal projects: only the working units
+// show the selection and only the left map is clickable. Reviews: every pane
+// (A, B, Final) is clickable and shows the selected unit as an orange border
+// that keeps the class colour visible.
+function _paneOpts(side, src) {
+  const review = _isReview();
+  return {
+    clickable: review || (side === 'left' && src.editable),
+    style:     { selectable: review || src.editable, keepColor: review },
+  };
 }
 
-function _subPointStyle(idx, spResult, cls) {
-  const isSelected = idx === state.selectedSubPointIdx;
+// Draw sub-point circles per pane; colour them if already classified. The
+// working lattice spans pixelCoverSizeM() — the full UA square by default, or
+// the buffered inner box when pixelInnerSizeM is set.
+function _renderSubPoints(plot) {
+  const schema = state.project?.classSchema || [];
+  for (const { side, target, layers } of _unitPanes()) {
+    const src = _paneUnits(plot, side, 'pixel');
+    if (!src) continue;
+    const { clickable, style } = _paneOpts(side, src);
+    generateSubPointPositions(plot.lat, plot.lon, src.coverM, src.gridStr).forEach(({ lat, lon, idx }) => {
+      const spResult = src.results[idx];
+      const cls      = spResult ? schema.find(c => String(c.code) === String(spResult.code)) : null;
+      const mk = L.circleMarker([lat, lon], { ..._subPointStyle(idx, spResult, cls, style), interactive: clickable }).addTo(target);
+      if (clickable) mk.on('click', () => { if (_onSubPointClick) _onSubPointClick(idx); });
+      layers[idx] = mk;
+    });
+  }
+}
+
+// opts.selectable: draw the selected unit as selected.
+// opts.keepColor: selection is an orange border over the class colour (reviews).
+function _subPointStyle(idx, spResult, cls, { selectable = true, keepColor = false } = {}) {
+  const fill = spResult ? (cls?.color || '#888') : '#111';
+  const isSelected = selectable && idx === state.selectedSubPointIdx;
+  if (isSelected && keepColor) {
+    return { radius:6, color:'#f59e0b', weight:3, fillColor: fill, fillOpacity:1 };
+  }
   if (isSelected) {
     // Highlighted (currently active)
     return { radius:5, color:'#fff', weight:2, fillColor:'#f59e0b', fillOpacity:1 };
   }
-  if (spResult && cls) {
-    // Classified — use class colour
-    return { radius:4, color:'rgba(255,255,255,0.6)', weight:1, fillColor: cls.color || '#888', fillOpacity:.9 };
-  }
   if (spResult) {
-    // Classified but class not in schema (edge case)
-    return { radius:4, color:'rgba(255,255,255,0.6)', weight:1, fillColor:'#888', fillOpacity:.9 };
+    // Classified — use class colour (grey if the class is not in the schema)
+    return { radius:4, color:'rgba(255,255,255,0.6)', weight:1, fillColor: fill, fillOpacity:.9 };
   }
   // Unclassified — solid black dot with thin white border
-  return { radius:4, color:'rgba(255,255,255,0.5)', weight:1, fillColor:'#111', fillOpacity:1 };
+  return { radius:4, color:'rgba(255,255,255,0.5)', weight:1, fillColor: fill, fillOpacity:1 };
 }
 
 // Grid mode: UA square (pixel footprint) + clickable cell rectangles
@@ -362,31 +461,28 @@ function _renderGridPlot(plot) {
   _renderCells(plot);
 }
 
-// Draw the cell rectangles; colour them if already classified
+// Draw the cell rectangles per pane; colour them if already classified.
 function _renderCells(plot) {
-  const cells       = generateCellBounds(plot.lat, plot.lon, gridCoverSizeM(), state.cellGrid);
-  const plotResults = (state.subPointResults[plot.id] || {});
-  const schema      = state.project?.classSchema || [];
-
-  cells.forEach(({ bounds, idx }) => {
-    const result = plotResults[idx];
-    const cls    = result ? schema.find(c => String(c.code) === String(result.code)) : null;
-
-    const styleL = _cellStyle(idx, result, cls);
-    const styleR = { ...styleL };
-
-    const cL = L.rectangle(bounds, styleL).addTo(mapL);
-    const cR = L.rectangle(bounds, { ...styleR, interactive:false }).addTo(mapR);
-
-    cL.on('click', () => { if (_onSubPointClick) _onSubPointClick(idx); });
-
-    subPointLayersL.push(cL);
-    subPointLayersR.push(cR);
-  });
+  const schema = state.project?.classSchema || [];
+  for (const { side, target, layers } of _unitPanes()) {
+    const src = _paneUnits(plot, side, 'grid');
+    if (!src) continue;
+    const { clickable, style } = _paneOpts(side, src);
+    generateCellBounds(plot.lat, plot.lon, src.coverM, src.gridStr).forEach(({ bounds, idx }) => {
+      const result = src.results[idx];
+      const cls    = result ? schema.find(c => String(c.code) === String(result.code)) : null;
+      const cell = L.rectangle(bounds, { ..._cellStyle(idx, result, cls, style), interactive: clickable }).addTo(target);
+      if (clickable) cell.on('click', () => { if (_onSubPointClick) _onSubPointClick(idx); });
+      layers[idx] = cell;
+    });
+  }
 }
 
-function _cellStyle(idx, result, cls) {
-  const isSelected = idx === state.selectedSubPointIdx;
+function _cellStyle(idx, result, cls, { selectable = true, keepColor = false } = {}) {
+  const isSelected = selectable && idx === state.selectedSubPointIdx;
+  if (isSelected && keepColor) {
+    return { color:'#f59e0b', weight:3, fillColor: result ? (cls?.color || '#888') : '#111', fillOpacity: result ? .45 : .05 };
+  }
   if (isSelected) {
     // Highlighted (currently active) — orange border + light orange wash
     return { color:'#f59e0b', weight:3, fillColor:'#f59e0b', fillOpacity:.18 };
@@ -400,51 +496,174 @@ function _cellStyle(idx, result, cls) {
 }
 
 // Style for one sub-point marker or cell rectangle, by assessment mode
-function _unitStyle(idx, result, cls) {
+function _unitStyle(idx, result, cls, opts) {
   return state.assessmentMode === 'grid'
-    ? _cellStyle(idx, result, cls)
-    : _subPointStyle(idx, result, cls);
+    ? _cellStyle(idx, result, cls, opts)
+    : _subPointStyle(idx, result, cls, opts);
 }
 
 // Refresh one sub-point's / cell's visual (call after classifying it)
 export function refreshSubPoint(plotId, idx) {
+  // Reviews draw the selection in A, B and Final — redraw them all.
+  if (_isReview()) { _redrawCurrent(); return; }
   const plotResults = state.subPointResults[plotId] || {};
   const schema      = state.project?.classSchema || [];
   const spResult    = plotResults[idx];
   const cls         = spResult ? schema.find(c => String(c.code) === String(spResult.code)) : null;
 
-  const mL = subPointLayersL[idx];
-  const mR = subPointLayersR[idx];
-  if (!mL || !mR) return;
-
   const style = _unitStyle(idx, spResult, cls);
-  mL.setStyle(style);
-  mR.setStyle(style);
+  [subPointLayersL, subPointLayersR].forEach(layers => layers[idx]?.setStyle(style));
 }
 
 // Highlight the newly selected sub-point / cell (deselect previous)
 export function highlightSubPoint(prevIdx, nextIdx) {
   const plot       = state.plots[state.currentIndex];
   if (!plot) return;
+  if (_isReview()) { _redrawCurrent(); return; }
   const plotResults = state.subPointResults[plot.id] || {};
   const schema      = state.project?.classSchema || [];
+  const panes       = [subPointLayersL, subPointLayersR];
 
   // Deselect previous
-  if (prevIdx != null && subPointLayersL[prevIdx]) {
+  if (prevIdx != null) {
     const pr  = plotResults[prevIdx];
     const cls = pr ? schema.find(c => String(c.code) === String(pr.code)) : null;
-    const st  = _unitStyle(prevIdx, pr, cls);
-    subPointLayersL[prevIdx].setStyle(st);
-    subPointLayersR[prevIdx].setStyle(st);
+    const st  = _unitStyle(prevIdx, pr, cls, { selectable: false });
+    panes.forEach(layers => layers[prevIdx]?.setStyle(st));
   }
   // Select next — keep the map fixed on the whole plot; only restyle the layer
-  if (nextIdx != null && subPointLayersL[nextIdx]) {
+  if (nextIdx != null) {
     const hiStyle = state.assessmentMode === 'grid'
       ? { color:'#f59e0b', weight:3, fillColor:'#f59e0b', fillOpacity:.18 }
       : { radius:5, color:'#fff', weight:2, fillColor:'#f59e0b', fillOpacity:1 };
-    subPointLayersL[nextIdx].setStyle(hiStyle);
-    subPointLayersR[nextIdx].setStyle(hiStyle);
+    panes.forEach(layers => layers[nextIdx]?.setStyle(hiStyle));
   }
+}
+
+function _redrawCurrent() {
+  const plot = state.plots[state.currentIndex];
+  if (plot) redrawPlotOverlays(plot);
+}
+
+// ── Final map window (review projects) ───────────────────────────────────
+// A floating, draggable, resizable map showing only the reviewer's Final
+// labels. Clicking a unit selects it; the class buttons label it.
+export function isFinalMapOpen() {
+  return !!mapF && !document.getElementById('finalMapWindow')?.classList.contains('hidden');
+}
+
+export function openFinalMap() {
+  const win = document.getElementById('finalMapWindow');
+  if (!win) return;
+  win.classList.remove('hidden');
+  if (!mapF) {
+    mapF = L.map('finalMap', { zoomControl:true });
+    finalGroup = L.layerGroup().addTo(mapF);
+    // Start on the left map's imagery; afterwards the window has its own choice.
+    const { s2Year, esriYear, pYear, pMonth } = _temporalParams('left');
+    const year = { sentinel2: s2Year, esri: esriYear, planet: pYear }[state.leftBasemap];
+    document.getElementById('finalBasemap').value = state.leftBasemap;
+    _fillFinalYears(state.leftBasemap, year);
+    if (pMonth) document.getElementById('finalMonth').value = pMonth;
+    _applyFinalBasemap();
+    new ResizeObserver(() => mapF.invalidateSize()).observe(win);
+    _makeDraggable(win, document.getElementById('finalMapHeader'));
+  }
+  mapF.invalidateSize();
+  const plot = state.plots[state.currentIndex];
+  if (plot) {
+    mapF.setView([plot.lat, plot.lon], mapL.getZoom(), { animate:false });
+    redrawPlotOverlays(plot);
+  }
+}
+
+// ── Final map basemap (its own selector in the window) ──
+const FINAL_YEARS = {
+  esri:      ['latest', '2025', '2024', '2023', '2022', '2021', '2020', '2019', '2018'],
+  sentinel2: ['2018', '2019', '2020', '2021', '2022', '2023', '2024'],
+  planet:    ['2016', '2017', '2018', '2019', '2020', '2021', '2022', '2023', '2024', '2025', '2026'],
+};
+const FINAL_DEFAULT_YEAR = { esri: 'latest', sentinel2: '2024', planet: '2024' };
+
+function _fillFinalYears(name, year) {
+  const sel   = document.getElementById('finalYear');
+  const years = FINAL_YEARS[name] || [];
+  sel.innerHTML = years.map(y => `<option value="${y}">${y === 'latest' ? 'Latest' : y}</option>`).join('');
+  sel.value = years.includes(year) ? year : (FINAL_DEFAULT_YEAR[name] || '');
+  sel.style.display = years.length ? '' : 'none';
+  document.getElementById('finalMonth').style.display = name === 'planet' ? '' : 'none';
+  sel.dataset.basemap = name;
+}
+
+function _applyFinalBasemap() {
+  const name  = document.getElementById('finalBasemap').value;
+  const year  = document.getElementById('finalYear').value;
+  const month = document.getElementById('finalMonth').value;
+  if (layerF) mapF.removeLayer(layerF);
+  layerF = getTileLayer(name, year, month).addTo(mapF);
+  layerF.bringToBack();
+}
+
+// Called by the window's selectors.
+export function setFinalBasemap() {
+  const name = document.getElementById('finalBasemap').value;
+  if (document.getElementById('finalYear').dataset.basemap !== name) _fillFinalYears(name);
+  _applyFinalBasemap();
+  // Hand the keyboard back so digit hotkeys label units instead of changing
+  // the dropdown's value.
+  document.activeElement?.blur();
+}
+
+// Imagery shown in the Final window, recorded as a result's image source.
+export function finalImageSource() {
+  const name  = document.getElementById('finalBasemap')?.value;
+  const year  = document.getElementById('finalYear')?.value || '';
+  const month = document.getElementById('finalMonth')?.value || '';
+  switch (name) {
+    case 'esri':      return { source: 'ESRI Wayback', date: year };
+    case 'sentinel2': return { source: 'Sentinel-2',   date: year };
+    case 'planet':    return { source: 'Planet',       date: `${year}-${month}` };
+    case 'bing':      return { source: 'Bing',         date: 'current' };
+    default:          return { source: 'Google',       date: 'current' };
+  }
+}
+
+export function closeFinalMap() {
+  document.getElementById('finalMapWindow')?.classList.add('hidden');
+  finalGroup?.clearLayers();
+  subPointLayersF = [];
+}
+
+// UA square / focus box and center marker for the Final window.
+function _renderFinalFrame(plot) {
+  document.getElementById('finalMapTitle').textContent = `Final — Plot #${plot.id}`;
+  const multi = state.assessmentMode === 'pixel' || state.assessmentMode === 'grid';
+  document.querySelector('#finalMapWindow .final-map-hint').textContent =
+    multi ? 'click a unit, then press its class key (or click a class)' : 'press a class key (or click a class)';
+  const size  = multi ? Number(state.plotSizeM) || 30 : Number(state.pointBoxSizeM) || 0;
+  if (size > 0) {
+    const { dlat, dlon } = metersToDeg(size, plot.lat);
+    L.rectangle([[plot.lat - dlat, plot.lon - dlon], [plot.lat + dlat, plot.lon + dlon]],
+      { color:'#f59e0b', weight:2, fillOpacity:0, dashArray:'5,5', interactive:false }).addTo(finalGroup);
+  }
+  const marker = L.circleMarker([plot.lat, plot.lon],
+    { radius: multi ? 5 : 6, color:'#fff', weight:2, fillColor:'#3b82f6', fillOpacity:.9, interactive:false }).addTo(finalGroup);
+  if (!multi) _reviewTooltip(marker, plot, 'final');
+}
+
+function _makeDraggable(win, handle) {
+  handle.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('button, select')) return;
+    const startX = e.clientX, startY = e.clientY;
+    const { left, top } = win.getBoundingClientRect();
+    const move = (ev) => {
+      win.style.left = `${Math.max(0, left + ev.clientX - startX)}px`;
+      win.style.top  = `${Math.max(0, top  + ev.clientY - startY)}px`;
+    };
+    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  });
 }
 
 // ── Basemap switching ─────────────────────────────────────────────────────
@@ -455,21 +674,13 @@ export function setMapLayer(side, name) {
 
   if (isLeft) state.leftBasemap = name; else state.rightBasemap = name;
 
-  // Gather temporal params from the correct selectors
-  const s2Year     = document.getElementById(isLeft ? 's2-year-left' : 's2-year-right')?.value;
-  const esriYear   = document.getElementById(isLeft ? 'esri-year-left' : 'esri-year-right')?.value;
-  const pYear      = document.getElementById(isLeft ? 'planet-year-left' : 'planet-year-right')?.value;
-  const pMonth     = document.getElementById(isLeft ? 'planet-month-left' : 'planet-month-right')?.value;
-
-  let newLayer;
-  if      (name === 'sentinel2') newLayer = getTileLayer('sentinel2', s2Year);
-  else if (name === 'esri')      newLayer = getTileLayer('esri', esriYear);
-  else if (name === 'planet')    newLayer = getTileLayer('planet', pYear, pMonth);
-  else                           newLayer = getTileLayer(name);
+  const { s2Year, esriYear, pYear, pMonth } = _temporalParams(side);
+  const newLayer = _tileLayerFor(side);
 
   m.removeLayer(oldL);
   newLayer.addTo(m);
   if (isLeft) layerL = newLayer; else layerR = newLayer;
+
 
   // Update mini-basemap active state
   const pane = document.getElementById(isLeft ? 'mini-basemaps-left' : 'mini-basemaps-right');
@@ -483,6 +694,27 @@ export function setMapLayer(side, name) {
 
   // Sync global toolbar (left map only, non-split)
   if (isLeft && !state.isSplitMode) _syncGlobalToolbar(name, s2Year, esriYear, pYear, pMonth);
+}
+
+// Temporal params from a pane's own selectors
+function _temporalParams(side) {
+  const isLeft = side === 'left';
+  return {
+    s2Year:   document.getElementById(isLeft ? 's2-year-left'      : 's2-year-right')?.value,
+    esriYear: document.getElementById(isLeft ? 'esri-year-left'    : 'esri-year-right')?.value,
+    pYear:    document.getElementById(isLeft ? 'planet-year-left'  : 'planet-year-right')?.value,
+    pMonth:   document.getElementById(isLeft ? 'planet-month-left' : 'planet-month-right')?.value,
+  };
+}
+
+// A fresh tile layer matching a pane's current basemap + temporal params
+function _tileLayerFor(side) {
+  const name = side === 'left' ? state.leftBasemap : state.rightBasemap;
+  const { s2Year, esriYear, pYear, pMonth } = _temporalParams(side);
+  if (name === 'sentinel2') return getTileLayer('sentinel2', s2Year);
+  if (name === 'esri')      return getTileLayer('esri', esriYear);
+  if (name === 'planet')    return getTileLayer('planet', pYear, pMonth);
+  return getTileLayer(name);
 }
 
 function _showMini(_pane, _prefix, id, show) {
