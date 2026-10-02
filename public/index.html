@@ -32,7 +32,7 @@
     <h3>Create Project</h3>
 
     <label class="field-label">Project Name</label>
-    <input type="text" id="newProjectName" placeholder="e.g. Maine CDL 2023" class="field-input">
+    <input type="text" autocomplete="off" id="newProjectName" placeholder="e.g. Maine CDL 2023" class="field-input">
 
     <label class="field-label" style="margin-top:12px;">Plot File
       <span class="hint">CSV · GeoJSON · KML · KMZ · Shapefile (.zip)</span>
@@ -196,8 +196,8 @@
       Plots where they disagree are left for you to resolve; agreed plots are merged automatically.
     </p>
 
-    <label class="field-label">Review Name <span class="hint">optional</span></label>
-    <input type="text" id="reviewProjectName" class="field-input" placeholder="Review — A vs B">
+    <label class="field-label">Review project name <span class="hint">optional</span></label>
+    <input type="text" autocomplete="off" id="reviewProjectName" class="field-input" placeholder="Review — A vs B">
 
     <div class="rv-src-grid">
       <div>
@@ -205,14 +205,14 @@
         <select id="reviewSrcA" class="field-input" onchange="app.onReviewSourceChange('A','select')"></select>
         <input type="file" id="reviewFileA" accept=".json" class="rv-file" onchange="app.onReviewSourceChange('A','file')">
         <label class="field-label" style="margin-top:8px;">Labeler A — name</label>
-        <input type="text" id="reviewNameA" class="field-input" placeholder="defaults to project name">
+        <input type="text" autocomplete="off" id="reviewNameA" class="field-input" placeholder="defaults to project name">
       </div>
       <div>
         <label class="field-label" style="margin-top:12px;">Labeler B — project</label>
         <select id="reviewSrcB" class="field-input" onchange="app.onReviewSourceChange('B','select')"></select>
         <input type="file" id="reviewFileB" accept=".json" class="rv-file" onchange="app.onReviewSourceChange('B','file')">
         <label class="field-label" style="margin-top:8px;">Labeler B — name</label>
-        <input type="text" id="reviewNameB" class="field-input" placeholder="defaults to project name">
+        <input type="text" autocomplete="off" id="reviewNameB" class="field-input" placeholder="defaults to project name">
       </div>
     </div>
 
@@ -227,7 +227,7 @@
     </div>
 
     <label class="field-label" style="margin-top:12px;">Reviewer name</label>
-    <input type="text" id="reviewReviewer" class="field-input" placeholder="defaults to the review name">
+    <input type="text" autocomplete="off" id="reviewReviewer" class="field-input" placeholder="defaults to the review project name">
 
     <div id="reviewPreview" style="margin-top:12px;"></div>
     <div id="createReviewError" class="error-msg hidden" style="margin-top:8px;"></div>
@@ -236,6 +236,56 @@
       <button class="basemap-btn" onclick="app.closeCreateReviewModal()">Cancel</button>
       <button class="basemap-btn" onclick="app.compareReviewSources()">Compare</button>
       <button class="submit-btn" style="padding:8px 20px;width:auto;" onclick="app.createReview()">Create review</button>
+    </div>
+  </div>
+</div>
+
+<!-- REVIEW SETTINGS (names only; sources and Compare by are locked) -->
+<div id="reviewSettingsModal" class="modal-overlay hidden">
+  <div class="modal-content" style="max-width:520px;width:90vw;">
+    <h3>Review settings</h3>
+    <p style="font-size:12px;color:var(--text-dim);margin-bottom:12px;">
+      The labelers' projects and <b>Compare by</b> decide every comparison and cannot be changed here —
+      create a new review to change them.
+    </p>
+
+    <label class="field-label">Review project name</label>
+    <input type="text" autocomplete="off" id="rvSetName" class="field-input" placeholder="Review — A vs B">
+
+    <div class="rv-src-grid">
+      <div>
+        <label class="field-label" style="margin-top:12px;">Labeler A — project 🔒</label>
+        <div id="rvSetSrcA" class="rv-locked"></div>
+        <label class="field-label" style="margin-top:8px;">Labeler A — name</label>
+        <input type="text" autocomplete="off" id="rvSetNameA" class="field-input">
+      </div>
+      <div>
+        <label class="field-label" style="margin-top:12px;">Labeler B — project 🔒</label>
+        <div id="rvSetSrcB" class="rv-locked"></div>
+        <label class="field-label" style="margin-top:8px;">Labeler B — name</label>
+        <input type="text" autocomplete="off" id="rvSetNameB" class="field-input">
+      </div>
+    </div>
+    <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">
+      Renaming a labeler replaces the old name everywhere: map labels, merged
+      "A: … | B: …" values and the per-labeler uploaded-file columns.
+    </div>
+
+    <label class="field-label" style="margin-top:12px;">Compare by 🔒</label>
+    <div id="rvSetCompareBy" class="rv-locked"></div>
+
+    <label class="field-label" style="margin-top:12px;">Reviewer name</label>
+    <input type="text" autocomplete="off" id="rvSetReviewer" class="field-input" placeholder="your name">
+    <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">
+      Plots submitted from now on are tagged with this name; plots already
+      resolved keep their reviewer unless they are submitted again.
+    </div>
+
+    <div id="reviewSettingsError" class="error-msg hidden" style="margin-top:8px;"></div>
+
+    <div class="modal-actions" style="margin-top:16px;">
+      <button class="basemap-btn" onclick="app.closeReviewSettings()">Cancel</button>
+      <button class="submit-btn" style="padding:8px 20px;width:auto;" onclick="app.saveReviewSettings()">Save</button>
     </div>
   </div>
 </div>
@@ -252,7 +302,7 @@
       <span id="planetKeyStatus" class="key-status"></span>
     </label>
     <div style="display:flex;gap:8px;">
-      <input type="password" id="planetApiKey" placeholder="Enter key to update…" class="field-input" style="flex:1;">
+      <input type="text" autocomplete="off" spellcheck="false" data-1p-ignore data-lpignore="true" id="planetApiKey" placeholder="Enter key to update…" class="field-input secret-input" style="flex:1;">
       <button class="basemap-btn" onclick="app.clearKey('planet')" title="Clear key">✕</button>
     </div>
 
@@ -264,7 +314,7 @@
       <span id="shIdStatus" class="key-status"></span>
     </label>
     <div style="display:flex;gap:8px;">
-      <input type="password" id="shClientId" placeholder="Enter Client ID…" class="field-input" style="flex:1;">
+      <input type="text" autocomplete="off" spellcheck="false" data-1p-ignore data-lpignore="true" id="shClientId" placeholder="Enter Client ID…" class="field-input secret-input" style="flex:1;">
       <button class="basemap-btn" onclick="app.clearKey('sentinel_hub_id')" title="Clear Client ID">✕</button>
     </div>
 
@@ -272,7 +322,7 @@
       <span id="shSecretStatus" class="key-status"></span>
     </label>
     <div style="display:flex;gap:8px;">
-      <input type="password" id="shClientSecret" placeholder="Enter Client Secret…" class="field-input" style="flex:1;">
+      <input type="text" autocomplete="off" spellcheck="false" data-1p-ignore data-lpignore="true" id="shClientSecret" placeholder="Enter Client Secret…" class="field-input secret-input" style="flex:1;">
       <button class="basemap-btn" onclick="app.clearKey('sentinel_hub_secret')" title="Clear Client Secret">✕</button>
     </div>
     <p style="font-size:11px;color:var(--text-dim);margin-top:8px;line-height:1.5;">
@@ -283,7 +333,7 @@
       <span id="geeProjectStatus" class="key-status"></span>
     </label>
     <div style="display:flex;gap:8px;">
-      <input type="password" id="geeProjectId" placeholder="e.g. ee-yourname…" class="field-input" style="flex:1;">
+      <input type="text" autocomplete="off" spellcheck="false" id="geeProjectId" placeholder="e.g. ee-yourname…" class="field-input" style="flex:1;">
       <button class="basemap-btn" onclick="app.clearKey('gee_project')" title="Clear GEE Project ID">✕</button>
     </div>
     <p style="font-size:11px;color:var(--text-dim);margin-top:8px;line-height:1.5;">
@@ -523,7 +573,12 @@
       <h1>EarthLabel</h1>
       <div class="subtitle">Land Cover Classification</div>
     </div>
-    <button class="icon-btn" onclick="app.openSettings()" title="Settings">⚙</button>
+    <div style="display:flex;gap:2px;align-items:center;">
+      <button class="icon-btn" onclick="app.openSettings()" title="Settings">⚙</button>
+      <button class="icon-btn sidebar-toggle-btn" onclick="app.toggleSidebar()" title="Hide the left panel" aria-label="Hide the left panel">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg>
+      </button>
+    </div>
   </div>
 
   <!-- PROJECT LIST VIEW -->
@@ -547,7 +602,7 @@
     <div class="sidebar-toolbar" style="justify-content:space-between;">
       <button class="basemap-btn" style="border:none;padding:0;display:flex;align-items:center;gap:4px;font-size:12px;" onclick="app.showProjectListView()">← Projects</button>
       <div style="display:flex;gap:6px;">
-        <button class="basemap-btn" style="padding:4px 10px;font-size:11px;" onclick="app.openProjectSettings()" title="Assessment / UA settings">⚙ UA</button>
+        <button id="btn-project-settings" class="basemap-btn" style="padding:4px 10px;font-size:11px;" onclick="app.openProjectSettings()" title="Assessment / UA settings">⚙ UA</button>
         <button class="basemap-btn" style="padding:4px 10px;font-size:11px;" onclick="app.exportProjectFile()" title="Export project JSON">↓</button>
         <button class="basemap-btn" style="padding:4px 10px;font-size:11px;color:var(--danger);border-color:var(--danger);" onclick="app.deleteCurrentProject()">🗑</button>
       </div>
@@ -582,8 +637,13 @@
 </div>
 
 <!-- ════════════════════════════════════════════════════ MAP AREA ══════════ -->
+<div class="panel-resizer" data-panel="sidebar" title="Drag to resize · double-click to reset"></div>
+
 <div class="main-area">
   <div class="map-toolbar">
+    <button class="basemap-btn sidebar-open-btn sidebar-toggle-btn" onclick="app.toggleSidebar()" title="Show the left panel" aria-label="Show the left panel">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg>
+    </button>
     <button class="basemap-btn" onclick="app.toggleSplitView()" id="btn-split">◫ Split</button>
     <div class="toolbar-separator"></div>
     <!-- Global basemap buttons (hidden in split mode) -->
@@ -639,7 +699,7 @@
       <span id="geRangeLabel" class="ge-range-label">1000 m</span>
     </div>
     <button class="nav-btn final-map-btn" id="btn-final-map" onclick="app.openFinalMap()" disabled
-            title="Open the Final map window — available in review projects">🗺 Final map</button>
+            title="Open the Final map window — available in review projects">Final map</button>
     <div class="plot-counter" id="plotCounter">–</div>
   </div>
 
@@ -721,6 +781,8 @@
 </div>
 
 <!-- ════════════════════════════════════════════════ RIGHT CLASSIFY PANEL ══ -->
+<div class="panel-resizer" data-panel="classify" title="Drag to resize · double-click to reset"></div>
+
 <div class="classify-panel">
   <div class="classify-header">
     <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -778,7 +840,6 @@
 <div id="finalMapWindow" class="final-map-window hidden" role="dialog" aria-label="Final labels map">
   <div class="final-map-header" id="finalMapHeader">
     <span id="finalMapTitle">Final</span>
-    <span class="final-map-hint"></span>
     <button class="icon-btn" onclick="app.closeFinalMap()" title="Close">✕</button>
   </div>
   <div class="final-map-basemaps">

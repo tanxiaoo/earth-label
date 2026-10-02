@@ -47,6 +47,10 @@ export const saveResult = (projectId, plotId, result) =>
 export const saveClassSchema = (projectId, classSchema) =>
   updateProject(projectId, { classSchema, lastUsed: new Date().toISOString() });
 
+// Review: { name, reviewer, labelerA, labelerB }
+export const saveReviewSettings = (projectId, reviewSettings) =>
+  updateProject(projectId, { reviewSettings, lastUsed: new Date().toISOString() });
+
 // Save UA / assessment settings for an existing project
 export const saveProjectSettings = (projectId, uaSettings) =>
   updateProject(projectId, { uaSettings, lastUsed: new Date().toISOString() });

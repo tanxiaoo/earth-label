@@ -6,10 +6,11 @@ import { initMap, navigateToPlot, setMapLayer, switchBasemap, toggleSplitView,
          registerSubPointClickHandler, redrawPlotOverlays,
          openFinalMap, closeFinalMap, isFinalMapOpen,
          setFinalBasemap, finalImageSource } from './map.js';
-import { isReviewProject, matchesReviewFilter, reviewBadgeHtml,
+import { isReviewProject, isResolvedResult, matchesReviewFilter, reviewBadgeHtml,
          renderReviewChrome, renderCompareCard,
          openCreateReviewModal, closeCreateReviewModal, compareReviewSources,
-         submitCreateReview, onReviewSourceChange } from './review.js';
+         submitCreateReview, onReviewSourceChange,
+         openReviewSettings, closeReviewSettings, saveReviewSettings as _saveReviewSettings } from './review.js';
 import { renderClassButtons, openClassEditor, closeClassEditor, saveClassSchema,
          saveSchemaAsPreset, addEditorClass, applyEditorPreset, exportClassSchema,
          importClassSchema, renderSchemaPreview } from './classes.js';
@@ -19,6 +20,7 @@ import { renderAnnotationInputs, readAnnotationInputs, clearAnnotationInputs,
          openAnnotationFieldsEditor, closeAnnotationFieldsEditor,
          addAnnotationField, saveAnnotationFields } from './annotation-fields.js';
 import { exportCSV, exportGeoJSON, exportProjectFile } from './export.js';
+import { initPanelResizers, toggleSidebar } from './resizers.js';
 import { initNdviPanel, openNdviPanel, closeNdviPanel, toggleNdviPanel,
          renderForCurrentPlot as renderNdviForCurrentPlot,
          fetchNdvi, refreshNdvi, saveNdviGuide, resetNdviGuide,
@@ -51,6 +53,7 @@ function setKeyBadge(id, isSet) {
 
 // ── Boot ──────────────────────────────────────────────────────────────────
 async function init() {
+  initPanelResizers();
   initMap();
   registerSubPointClickHandler(selectSubPoint);
   setupDropZone();
@@ -158,7 +161,7 @@ async function loadProject(id) {
       resultCode:  r.code  ?? null, resultLabel: r.label ?? null,
       confidence:  r.confidence ?? null,
       annotations,
-      completed:   !!(r.code != null),
+      completed:   isResolvedResult(p.id, r, proj.type === 'review' ? proj.review : null),
     };
   });
 
@@ -211,7 +214,12 @@ async function loadProject(id) {
   document.querySelectorAll('.conf-btn').forEach(b => b.classList.remove('selected'));
   hide('welcomeOverlay');
 
-  if (plots.length) {
+  if (plots.length && isReview) {
+    // Start on the first unresolved plot of the opening (Disagree) tab.
+    const inTab = _sortedPlots().filter(_inCurrentFilter);
+    const first = inTab.find(p => !p.completed) || inTab[0];
+    goToPlot(first ? first.idx : 0);
+  } else if (plots.length) {
     const first = plots.findIndex(p => !p.completed);
     goToPlot(first >= 0 ? first : 0);
   } else {
@@ -383,6 +391,7 @@ export async function onImportProjectFile(event) {
 // ── Project settings modal ────────────────────────────────────────────────
 export function openProjectSettings() {
   if (!state.project) return;
+  if (isReviewProject()) { openReviewSettings(); return; }
   $('settingsAssessMode').value    = state.assessmentMode;
   _toggleSettingsUAFields(state.assessmentMode);
   $('settingsPlotSizeM').value     = state.plotSizeM;
@@ -528,22 +537,30 @@ export async function saveProjectSettings() {
 }
 
 // ── Plot list ─────────────────────────────────────────────────────────────
+// All plots (with their index into state.plots) in plot-list order: by ID.
+function _sortedPlots() {
+  return state.plots
+    .map((p,i) => ({...p, idx:i}))
+    .sort((a,b) => String(a.id).localeCompare(String(b.id), undefined, { numeric:true }));
+}
+
+// Whether a plot belongs to the active tab (All / Pending / Done / Disagree / Partial).
+function _inCurrentFilter(p) {
+  if (state.currentFilter === 'pending') return !p.completed;
+  if (state.currentFilter === 'done')    return  p.completed;
+  if (state.currentFilter === 'disagree' || state.currentFilter === 'partial')
+    return matchesReviewFilter(p.id, state.currentFilter);
+  return true;
+}
+
 function renderPlotList({ keepScroll = false } = {}) {
   const schema = state.project?.classSchema || [];
   const list   = $('plotList');
   list.innerHTML = '';
 
   let activeEl = null;
-  state.plots
-    .map((p,i) => ({...p, idx:i}))
-    .filter(p => {
-      if (state.currentFilter === 'pending') return !p.completed;
-      if (state.currentFilter === 'done')    return  p.completed;
-      if (state.currentFilter === 'disagree' || state.currentFilter === 'partial')
-        return matchesReviewFilter(p.id, state.currentFilter);
-      return true;
-    })
-    .sort((a,b) => String(a.id).localeCompare(String(b.id), undefined, { numeric:true }))
+  _sortedPlots()
+    .filter(_inCurrentFilter)
     .forEach(p => {
       const showUserLabel = state.currentFilter === 'done' && p.completed;
       const tagCls = showUserLabel
@@ -665,27 +682,30 @@ export function goToPlot(index) {
   _syncKml(p);
 }
 
+// Next / Prev stay inside the active tab (e.g. Disagree only), in plot-list
+// order. Next prefers an unlabeled plot; once every plot of the tab is
+// labeled it keeps cycling through the tab so labels can be re-checked.
 export function nextPlot() {
-  const { plots, currentIndex, randomNav } = state;
-  if (randomNav) {
-    // Prefer a random unlabeled plot; once everything is labeled, keep jumping
-    // randomly among ALL plots so the user can re-check labels in random order.
-    const pending = [], others = [];
-    for (let i = 0; i < plots.length; i++) {
-      if (i === currentIndex) continue;
-      (plots[i].completed ? others : pending).push(i);
-    }
-    const pool = pending.length ? pending : others;
-    if (pool.length) { goToPlot(pool[Math.floor(Math.random()*pool.length)]); return; }
-    // pool empty (0 or 1 plot total) → fall through to sequential handling
+  const sorted = _sortedPlots();
+  const pos  = sorted.findIndex(p => p.idx === state.currentIndex);
+  // The tab's other plots, starting after the current one and wrapping around.
+  const ring = [...sorted.slice(pos + 1), ...sorted.slice(0, Math.max(pos, 0))].filter(_inCurrentFilter);
+  if (!ring.length) return;
+  const pending = ring.filter(p => !p.completed);
+  if (state.randomNav) {
+    const pool = pending.length ? pending : ring;
+    goToPlot(pool[Math.floor(Math.random()*pool.length)].idx);
+    return;
   }
-  for (let i = currentIndex+1; i < plots.length; i++) if (!plots[i].completed) { goToPlot(i); return; }
-  for (let i = 0; i < currentIndex; i++)               if (!plots[i].completed) { goToPlot(i); return; }
-  if (currentIndex+1 < plots.length) goToPlot(currentIndex+1);
+  goToPlot((pending[0] || ring[0]).idx);
 }
 
 export function prevPlot() {
-  if (state.currentIndex > 0) goToPlot(state.currentIndex - 1);
+  const sorted = _sortedPlots();
+  const pos = sorted.findIndex(p => p.idx === state.currentIndex);
+  for (let i = pos - 1; i >= 0; i--) {
+    if (_inCurrentFilter(sorted[i])) { goToPlot(sorted[i].idx); return; }
+  }
 }
 
 export function openGoogleEarth() {
@@ -1271,6 +1291,18 @@ async function createReview() {
   if (id) await loadProject(id);
 }
 
+// Review settings changed names (possibly rewriting merged values and
+// columns on the server): reload, staying on the same tab and plot.
+async function saveReviewSettings() {
+  if (!(await _saveReviewSettings())) return;
+  const plotId = state.plots[state.currentIndex]?.id;
+  const tab    = state.currentFilter;
+  await loadProject(state.project.id);
+  filterPlots(tab);
+  const idx = state.plots.findIndex(p => p.id === plotId);
+  if (idx >= 0) goToPlot(idx);
+}
+
 // ── Settings ──────────────────────────────────────────────────────────────
 function refreshKeyBadges() {
   return api.getKeyStatus().then(s => {
@@ -1402,12 +1434,12 @@ window.app = {
   setProjectSort, showProjectListView, deleteCurrentProject,
   importProjectFile, onImportProjectFile, exportProjectFile, loadDemoData,
   openCreateReviewModal, closeCreateReviewModal, compareReviewSources, createReview,
-  onReviewSourceChange, useReviewSource,
+  onReviewSourceChange, useReviewSource, closeReviewSettings, saveReviewSettings,
   // Final map window: the image-source line tracks the window's imagery.
   openFinalMap:    () => { openFinalMap();    _updateImageSourceDisplay(); },
   closeFinalMap:   () => { closeFinalMap();   _updateImageSourceDisplay(); },
   setFinalBasemap: () => { setFinalBasemap(); _updateImageSourceDisplay(); },
-  goToPlot, nextPlot, prevPlot, filterPlots, toggleRandomNav, setRandomNav,
+  goToPlot, nextPlot, prevPlot, filterPlots, toggleRandomNav, setRandomNav, toggleSidebar,
   toggleSplitView,
   switchBasemap:       (name)       => { switchBasemap(name);       _updateImageSourceDisplay(); },
   setMapLayer:         (side, name) => { setMapLayer(side, name);   _updateImageSourceDisplay(); },

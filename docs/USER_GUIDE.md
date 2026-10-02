@@ -234,7 +234,7 @@ Validation campaigns often label every point twice, by two people working indepe
 
 **1. Labelers A and B** each create a normal project from the **same point file** (same plot IDs) and label it. When done, each clicks **↓** in the plot-list sidebar to download their project `.json` and sends it to the reviewer.
 
-**2. The reviewer** clicks **⇄ Review** in the project list and, for each labeler, either uploads that `.json` file or picks a project already on this machine. Enter each labeler's name (default: their project name) and the reviewer's name (default: the review's name) — these names label the maps, the compare card and the export columns. **Compare by** chooses what is compared:
+**2. The reviewer** clicks **⇄ Review** in the project list and, for each labeler, either uploads that `.json` file or picks a project already on this machine. Enter each labeler's name (default: their project name) and the reviewer's name (default: the review project name) — these names label the maps, the compare card and the export columns. **Compare by** chooses what is compared:
 
 - **Final class (EarthLabel label)** — the default: the class each labeler assigned in EarthLabel.
 - **Column: …** — a column from the uploaded point files that both projects share (e.g. labels made outside EarthLabel). Only the agree / disagree decision changes — everything else follows the same rules as the default: in pixel/grid mode, plots whose column values agree but whose sub-points / cells differ are **Partial**, the A / B / Final unit matrix is shown (the card says *Compared by column: …* and the A and B rows end with each labeler's column value), and agreed plots are merged the same way. The **Disagree** and **Partial** tabs list plots strictly by that status. Values are compared as numbers when both are numeric (`20` = `20.0`), otherwise as text ignoring case, and a value that names a class (by code or label) counts as that class, so `20` and `Forest` agree. The merged Final class is the class the value names; if it names none, the labelers' shared EarthLabel class (or the majority of the merged units). Agreed plots that still end up without a class are warned about and left for the reviewer. The export adds `compare_by`; the compared column itself is exported like any other file column (see step 4).
@@ -250,17 +250,17 @@ Validation campaigns often label every point twice, by two people working indepe
 | Status | Meaning | Starts as |
 |--------|---------|-----------|
 | `agree` | Same class (and same units in pixel/grid mode) | resolved — merged automatically |
-| `agree_partial` | Same class, but some sub-points / cells differ | resolved — merged automatically; listed under **Partial** for optional review |
+| `agree_partial` | Same class, but some sub-points / cells differ | pending — the merge is pre-filled as a *proposed* Final; check it under **Partial** and **Submit** to confirm |
 | `disagree` | Different class | pending |
 | `missing_a` / `missing_b` / `missing_both` | One or both labelers skipped the plot | pending |
 
 The progress bar therefore counts the decisions left, and the review opens on the **Disagree** tab.
 
-**3. Resolving a plot.** The plot list has **All / Disagree / Partial** tabs, and each plot shows its status badge (Agree, Partial, Disagree, Missing). In a review the screen is laid out as:
+**3. Resolving a plot.** The plot list has **All / Disagree / Partial** tabs, and each plot shows its status badge (Agree, Partial, Disagree, Missing). **Next →**, **Prev ←** and **Submit & Next** stay inside the active tab (in Sequential or Random order), so you can work through Disagree, then Partial, one plot at a time. In a review the screen is laid out as:
 
 - **Left map = A**, **right map = B** (split view is always on; each map is labelled with the labeler's name). Every sub-point / cell is clickable in both maps.
-- **Right panel — compare matrix**: three rows, **A**, **B** and **Final**, with one coloured square per sub-point / cell (e.g. 9 for a 3×3 grid), each row ending with its class and how many units back it (e.g. `Forest 5/9`). Clicking a square — or a unit on any map — selects that unit everywhere (orange border) and the list below shows, colour first, which class A, B and Final gave it. Text annotations of both labelers are shown underneath.
-- **Final map window**: a floating map (drag it by its purple header, resize it from the corner) showing only your Final labels, with its own basemap / year selector. Open it with **🗺 Final map** in the toolbar (right of the Google Earth distance slider; greyed out outside review projects); it also opens by itself when you start labeling.
+- **Right panel — compare matrix**: three rows, **A**, **B** and **Final**, with one coloured square per sub-point / cell (e.g. 9 for a 3×3 grid), each row ending with the label being compared: its class (e.g. `Forest`) — or, in a review compared by an uploaded-file column, A's and B's value of that column (the Final row ends empty there). Clicking a square — or a unit on any map — selects that unit everywhere (orange border) and the list below shows, colour first, which class A, B and Final gave it. Text annotations of both labelers are shown underneath.
+- **Final map window**: a floating map (drag it by its purple header, resize it from the corner) showing only your Final labels, with its own basemap / year selector. Open it with **Final map** in the toolbar (right of the Google Earth distance slider; greyed out outside review projects); it also opens by itself when you start labeling.
 
 To resolve, select a unit (in the Final window, on A's or B's map, or in the matrix) and either press its **class hotkey** / click the class, or click **Use** at the end of the A or B row to give it the class that labeler chose for that unit (point mode: their class). Either way labeling advances to the next unit. When every Final unit is labeled (point mode: once a class is picked), **Submit**. While the Final window is open, the result's image source is the window's imagery.
 
@@ -276,14 +276,26 @@ In point mode the matrix shows one class per row and each map's marker is tagged
 | Confidence, image source, image date, time spent | both labelers' values, named: `xiao: ESRI \| keerthana: Google`, `xiao: 42 \| keerthana: 30`; identical values once |
 | Units (units differ) | shared units kept; differing units from the labeler whose units back the agreed class more (ties → A) |
 
-**4. Export.** The review's **↓ CSV** / **↓ GeoJSON** contain every point once:
+**4. Export.** The review's **↓ CSV** / **↓ GeoJSON** contain every point once, always in the same layout (whatever the values), so every review exports alike. Split columns put the reviewed value first: `<column>_review`, then `<column>_<A name>`, then `<column>_<B name>` (e.g. `class_code_review, class_code_keerthana, class_code_xiao`):
 
-- **ID, LAT, LON** and the other fixed columns — once.
-- **EarthLabel values** — class, confidence, image source/date, time, sub-point / cell columns — are the **Final** only: the reviewer's own values for plots the reviewer labeled; for agreed plots the merged consensus, which keeps both labelers' confidence, imagery and time side by side (see the merge table above).
-- **Uploaded-file columns** of both labelers are merged: a column with identical values in both projects appears once; a column whose values differ appears twice, suffixed with each labeler's name (e.g. `imperv_level_xiao`, `imperv_level_keerthana`). A column only one project has is kept as it is.
-- At the end of each row: `labeler_a`, `labeler_b`, `a_class_code`, `a_class_label`, `b_class_code`, `b_class_label`, `unit_agreement_pct`, `resolved_by` (`consensus` / `reviewer`), `reviewer`, `compare_by` (column reviews only) and, last, **`agreement`** — the original A-vs-B status (`agree` / `agree_partial` / `disagree` / `missing_a` / `missing_b` / `missing_both`), which never changes.
+| Columns | Kept as |
+|---------|---------|
+| `PLOTID`, `LAT`, `LON` | once (A and B label the same points) |
+| `ref_code`, `ref_label` | once; split per labeler only if A's and B's references differ |
+| `class_code`, `class_label`, `confidence`, `image_source`, `image_date`, `time_spent_s` | always `_review`, `_<A>`, `_<B>` |
+| `assessment_mode`, `ua_size_m`, `cell_grid`, `cell_coverage_m` (pixel: `sub_point_grid`, `sub_point_coverage_m`) | once (A and B assess with the same UA) |
+| `cells_json`, `cell_total`, `cell_dominant_count`, `cell_dominant_pct`, `cell_class_pct_json`, `cell_0…` (pixel: `sub_points_json` … `sp_0…`) | once — the **reviewed** units |
+| annotation fields (e.g. `notes`) | always `_review`, `_<A>`, `_<B>` |
+| uploaded-file columns | always `_<A>`, `_<B>`, in the uploaded file's column order |
+| `labeler_a`, `labeler_b`, `unit_agreement_pct`, `resolved_by` (`consensus` / `reviewer`), `reviewer`, `compare_by` (column reviews only), `agreement` | at the end of each row |
 
-The merged file columns are fixed when the review is created, so recreate older reviews to get them.
+The `_review` class and units are the Final: the reviewer's labels, the consensus for agreed plots, or the proposed merge for a Partial plot not yet confirmed. The `_review` confidence, image source/date, time and notes are the reviewer's own, so they are filled only on plots the reviewer submitted; agreed plots keep them in the A and B columns. `reviewer` is the name of whoever last submitted that plot, or `Proposed` for a Partial plot whose merge was not yet confirmed (see *Review settings* below). `agreement`, last, is the original A-vs-B status (`agree` / `agree_partial` / `disagree` / `missing_a` / `missing_b` / `missing_both`), which never changes.
+
+**Review settings.** In a review the toolbar's **⚙ Review** button (in place of **⚙ UA** — a review keeps labeler A's assessment settings) opens a panel like the one used to create the review. The labelers' projects and **Compare by** are shown locked: changing them changes every comparison, so create a new review instead. Editable:
+
+- **Review project name**.
+- **Labeler A / B name** — replaces the old name everywhere: maps, compare card, the `labeler_a` / `labeler_b` columns, merged `A: … | B: …` values and the per-labeler file columns (`imperv_level_<name>`).
+- **Reviewer name** — to hand over to another reviewer. Plots submitted from then on (including plots the previous reviewer already resolved, if submitted again) get the new name; all other plots keep the previous reviewer's.
 
 ---
 

@@ -638,8 +638,6 @@ export function closeFinalMap() {
 function _renderFinalFrame(plot) {
   document.getElementById('finalMapTitle').textContent = `Final — Plot #${plot.id}`;
   const multi = state.assessmentMode === 'pixel' || state.assessmentMode === 'grid';
-  document.querySelector('#finalMapWindow .final-map-hint').textContent =
-    multi ? 'click a unit, then press its class key (or click a class)' : 'press a class key (or click a class)';
   const size  = multi ? Number(state.plotSizeM) || 30 : Number(state.pointBoxSizeM) || 0;
   if (size > 0) {
     const { dlat, dlon } = metersToDeg(size, plot.lat);

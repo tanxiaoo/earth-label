@@ -37,6 +37,25 @@ export function labelerName(side) {
   return state.review?.labelers?.[side]?.name || side;
 }
 
+// Per-labeler column suffixes ("Keerthana R." → "keerthana_r"). Must match
+// _suffixes in server/lib/compare.js, which names the split file columns.
+export function labelerSuffixes() {
+  const slug = s => String(s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  let A = slug(state.review?.labelers?.A?.name) || 'a';
+  let B = slug(state.review?.labelers?.B?.name) || 'b';
+  if (A === B) { A += '_a'; B += '_b'; }
+  return { A, B };
+}
+
+// A plot's saved result counts as resolved. In a review, a "Partial" plot's
+// auto-merged Final is only a proposal: it stays unresolved until the
+// reviewer submits it, just like a "Disagree" plot.
+export function isResolvedResult(plotId, result, review = state.review) {
+  if (result?.code == null) return false;
+  if (!review) return true;
+  return !(review.items?.[plotId]?.status === 'agree_partial' && result.resolvedBy === 'consensus');
+}
+
 // Plot-list filter for review projects: 'disagree' | 'partial', strictly by
 // the plot's A-vs-B status.
 export function matchesReviewFilter(plotId, filter) {
@@ -60,6 +79,13 @@ export function renderReviewChrome() {
   ['filter-disagree', 'filter-partial'].forEach(id => $(id)?.classList.toggle('rv-off', !on));
   ['filter-pending', 'filter-done'].forEach(id => $(id)?.classList.toggle('rv-off', on));
   $('reviewCompareCard')?.classList.toggle('rv-off', !on);
+  // A review's assessment settings come from labeler A and must not change,
+  // so the ⚙ button opens the review settings instead.
+  const setBtn = $('btn-project-settings');
+  if (setBtn) {
+    setBtn.textContent = on ? '⚙ Review' : '⚙ UA';
+    setBtn.title = on ? 'Review settings — names' : 'Assessment / UA settings';
+  }
   // Always visible in the toolbar; only usable in a review.
   const finalBtn = $('btn-final-map');
   if (finalBtn) finalBtn.disabled = !on;
@@ -75,17 +101,64 @@ export function renderReviewChrome() {
   banner.classList.toggle('rv-off', !on);
   if (!on) { banner.innerHTML = ''; return; }
 
-  const s = state.review?.stats || {};
-  const warnings = state.review?.warnings || [];
-  const kappa = s.kappa != null ? ` · κ ${s.kappa.toFixed(2)}` : '';
-  const pct   = s.agreementPct != null ? `${s.agreementPct}%` : '–';
   banner.innerHTML =
-    `<div><b>A</b> ${_esc(labelerName('A'))} · <b>B</b> ${_esc(labelerName('B'))}` +
-    (state.review?.reviewer ? ` · reviewer ${_esc(state.review.reviewer)}` : '') + `</div>` +
-    `<div>Agreement ${pct}${kappa} · ${s.disagree ?? 0} disagree · ${(s.missingA ?? 0) + (s.missingB ?? 0) + (s.missingBoth ?? 0)} missing</div>` +
-    (warnings.length
-      ? `<div class="rv-warn" title="${_esc(warnings.join('\n'))}">⚠ ${warnings.length} warning${warnings.length > 1 ? 's' : ''} (hover)</div>`
-      : '');
+    `<div><b>A</b> ${_esc(labelerName('A'))} · <b>B</b> ${_esc(labelerName('B'))}</div>` +
+    `<div><b>Reviewer:</b> ${_esc(state.review?.reviewer || '–')}</div>`;
+}
+
+// ── Review settings modal ─────────────────────────────────────────────────
+// The sources and "Compare by" decide every comparison, so they are shown
+// locked (changing them means creating a new review). Names can change:
+// the reviewer applies to plots submitted from now on (resolved plots keep
+// the reviewer stored with them); a labeler rename is applied everywhere
+// that labeler's name was written (see renameLabelers in compare.js).
+export function openReviewSettings() {
+  if (!isReviewProject()) return;
+  const rv = state.review || {};
+  $('rvSetName').value     = state.project.name || '';
+  $('rvSetReviewer').value = rv.reviewer || '';
+  for (const side of ['A', 'B']) {
+    const l = rv.labelers?.[side] || {};
+    $(`rvSetName${side}`).value = l.name || '';
+    $(`rvSetName${side}`).placeholder = l.sourceProjectName || `Labeler ${side}`;
+    $(`rvSetSrc${side}`).textContent  = l.sourceProjectName || '–';
+  }
+  $('rvSetCompareBy').textContent = rv.compareBy ? `Column: ${rv.compareBy}` : 'Final class (EarthLabel label)';
+  _settingsError('');
+  $('reviewSettingsModal').classList.remove('hidden');
+}
+
+export function closeReviewSettings() {
+  $('reviewSettingsModal').classList.add('hidden');
+}
+
+function _settingsError(msg) {
+  const el = $('reviewSettingsError');
+  el.textContent = msg || '';
+  el.classList.toggle('hidden', !msg);
+}
+
+// Saves the names; returns true when something was saved (the caller reloads).
+export async function saveReviewSettings() {
+  const rv = state.review || {};
+  const settings = {
+    name:     $('rvSetName').value.trim(),
+    reviewer: $('rvSetReviewer').value.trim(),
+    labelerA: $('rvSetNameA').value.trim(),
+    labelerB: $('rvSetNameB').value.trim(),
+  };
+  if (!settings.name || !settings.reviewer || !settings.labelerA || !settings.labelerB) {
+    _settingsError('All names are required.');
+    return false;
+  }
+  const unchanged = settings.name === state.project.name && settings.reviewer === rv.reviewer &&
+    settings.labelerA === rv.labelers?.A?.name && settings.labelerB === rv.labelers?.B?.name;
+  if (unchanged) { closeReviewSettings(); return false; }
+  try {
+    await api.saveReviewSettings(state.project.id, settings);
+  } catch (e) { _settingsError(e.message); return false; }
+  closeReviewSettings();
+  return true;
 }
 
 // ── Compare card ──────────────────────────────────────────────────────────
@@ -113,14 +186,12 @@ function _unitMap(r) {
   return Object.fromEntries(units.map(u => [u.idx, { code: u.code, label: u.label }]));
 }
 
-// "Forest 5/9": the row's class and how many units back it.
-function _summary(units, total, code, label) {
+// The row's class — the label A, B and Final are compared by.
+function _summary(code, label) {
   if (code == null) return '<span class="rv-none">—</span>';
-  const n = Object.values(units).filter(u => String(u.code) === String(code)).length;
-  // Only the class name shrinks when space is tight; the count always shows.
+  const name = label || _cls(code)?.label || code;
   return `<span class="rv-chip" style="background:${_cls(code)?.color || '#888'}"></span>` +
-         `<span class="rv-sum-label" title="${_esc(label)}">${_esc(label || _cls(code)?.label || code)}</span>` +
-         `<b>${n}/${total}</b>`;
+         `<span class="rv-sum-label" title="${_esc(name)}">${_esc(name)}</span>`;
 }
 
 const RESOLVED_TEXT = {
@@ -213,11 +284,15 @@ export function renderCompareCard(plot) {
                     onmousedown="event.preventDefault()" onclick="app.selectSubPoint(${i})"></button>`;
         }).join('')
       : _chip(r.units[0]);
-    // Compared by a column: A / B rows end with that labeler's column value.
+    // Compared by a column: A / B rows end with that labeler's column value;
+    // the Final has no such value (it comes from the uploaded files), so its
+    // row ends empty. Compared by the EarthLabel class: every row ends with
+    // its class.
     const sum = !multi ? ''
-      : compareBy && r.key !== 'F'
+      : compareBy && r.key === 'F' ? ''
+      : compareBy
       ? `<span class="rv-sum"><b>${_esc(item[`value${r.key}`] ?? '–')}</b></span>`
-      : `<span class="rv-sum">${_summary(r.units, total, r.code, r.label)}</span>`;
+      : `<span class="rv-sum">${_summary(r.code, r.label)}</span>`;
     return `<div class="rv-mrow${r.key === 'F' ? ' rv-final' : ''}">
               <div class="rv-mname" title="${_esc(r.name)}">${_esc(r.name)}</div>
               <div class="rv-squares">${cells}</div>${sum || '<span></span>'}${useBtn(r.key)}
@@ -250,7 +325,10 @@ export function renderCompareCard(plot) {
   card.innerHTML = `
     <div class="rv-head">
       <span class="rv-badge rv-${meta[2]}" title="${meta[1]}">${meta[0]}</span>
-      ${saved ? `<span class="rv-resolved">✓ ${_esc(RESOLVED_TEXT[saved.resolvedBy] || 'Resolved')}: ${_esc(saved.label)}</span>` : ''}
+      ${!saved ? ''
+        : isResolvedResult(plot.id, saved)
+        ? `<span class="rv-resolved">✓ ${_esc(RESOLVED_TEXT[saved.resolvedBy] || 'Resolved')}: ${_esc(saved.label)}</span>`
+        : `<span class="rv-resolved rv-proposed" title="Merged from A and B — check the units and submit to confirm">Proposed: ${_esc(saved.label)} · submit to confirm</span>`}
     </div>
     ${compareBy ? `<div class="rv-compare-by">Compared by column: <b>${_esc(compareBy)}</b></div>` : ''}
     <div class="rv-matrix">${matrix}</div>

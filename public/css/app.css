@@ -84,7 +84,30 @@ body {
 .filter-btn.active { background:var(--accent);color:#fff;border-color:var(--accent); }
 
 /* ── MAP AREA ────────────────────────────────────────────────────────────── */
-.main-area { flex:1;display:flex;flex-direction:column; }
+.main-area { flex:1;display:flex;flex-direction:column;min-width:0; }
+
+/* Drag handles between the side panels and the map (see resizers.js). The
+   handle overlaps the panel borders so the hit area is wider than it looks. */
+.panel-resizer {
+  flex:0 0 6px;margin:0 -3px;z-index:1100;position:relative;
+  cursor:col-resize;background:transparent;transition:background .15s;
+}
+.panel-resizer:hover, .panel-resizer.dragging { background:var(--accent); }
+body.panel-resizing { cursor:col-resize;user-select:none; }
+
+/* Collapsible left panel: « in its header hides it, » in the map toolbar
+   (shown only while hidden) brings it back. */
+body.sidebar-collapsed .sidebar,
+body.sidebar-collapsed .panel-resizer[data-panel="sidebar"] { display:none; }
+.sidebar-toggle-btn { display:inline-flex;align-items:center;justify-content:center; }
+.sidebar-open-btn.sidebar-toggle-btn { padding:5px 8px; }
+body:not(.sidebar-collapsed) .sidebar-open-btn { display:none; }
+.sidebar-toggle-btn svg {
+  width:18px;height:18px;fill:none;stroke:currentColor;
+  stroke-width:2;stroke-linecap:round;stroke-linejoin:round;
+}
+/* Keep the maps from swallowing the pointer while dragging. */
+body.panel-resizing #map-wrapper, body.panel-resizing iframe { pointer-events:none; }
 
 .map-toolbar {
   display:flex;align-items:center;padding:10px 14px;gap:6px;
@@ -709,7 +732,7 @@ body.split-mode .global-basemaps { display:none !important; }
   font-family:'JetBrains Mono',monospace;
 }
 .rv-stats b { color:var(--text); }
-.rv-warn { color:var(--warning);cursor:help; }
+.rv-locked { font-size:12px;padding:7px 10px;border:1px dashed var(--border, #333);border-radius:6px;color:var(--text-dim); }
 
 /* status badges (plot list + compare card) */
 .rv-badge {
@@ -727,6 +750,11 @@ body.split-mode .global-basemaps { display:none !important; }
 }
 .rv-head { display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:8px; }
 .rv-resolved { color:var(--success);font-weight:600; }
+/* API keys: masked text, not type="password" — a password field makes the
+   browser treat the whole page as a login form and offer to save/fill
+   "passwords" in unrelated inputs (project / review names). */
+.secret-input { -webkit-text-security:disc; text-security:disc; }
+.rv-resolved.rv-proposed { color:var(--warning, #e0a030); }
 .rv-chip { display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;vertical-align:middle; }
 .rv-none { color:#555; }
 
@@ -796,7 +824,7 @@ body.split-mode .global-basemaps { display:none !important; }
   display:flex;align-items:center;gap:8px;padding:6px 10px;cursor:move;user-select:none;
   background:#a855f7;color:#fff;font-weight:700;font-size:13px;
 }
-.final-map-hint { flex:1;font-weight:400;font-size:11px;opacity:.85; }
+#finalMapTitle { flex:1; }
 .final-map-header .icon-btn { color:#fff; }
 .final-map-basemaps {
   display:flex;gap:4px;padding:5px 8px;background:#12141c;border-bottom:1px solid var(--panel-border);

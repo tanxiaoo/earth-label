@@ -212,10 +212,18 @@ function _slug(name) {
   return String(name).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
 }
 
-// Merge A's and B's uploaded-file columns (plot.meta). A column whose values
-// are identical for every plot both have is kept once; a column that differs
-// anywhere is kept twice, suffixed with each labeler's name
-// (imperv_level_xiao / imperv_level_keerthana). Returns {plotId: meta}.
+// Column suffixes for the two labelers; kept distinct when the names slug alike.
+function _suffixes(names) {
+  let sA = _slug(names.A) || 'a', sB = _slug(names.B) || 'b';
+  if (sA === sB) { sA += '_a'; sB += '_b'; }
+  return { A: sA, B: sB };
+}
+
+// Merge A's and B's uploaded-file columns (plot.meta). Every column is always
+// kept once per labeler, suffixed with their name (imperv_level_xiao /
+// imperv_level_keerthana) — whatever the values — so the same inputs always
+// give the same columns. Order: A's file order, then columns only B has;
+// A's column right before B's. Returns {plotId: meta}.
 function _mergeMeta(ids, plotsA, plotsB, names) {
   const keys = [];
   const seen = new Set();
@@ -224,25 +232,15 @@ function _mergeMeta(ids, plotsA, plotsB, names) {
       for (const k of Object.keys(p.meta || {})) if (!seen.has(k)) { seen.add(k); keys.push(k); }
     }
   }
-  const differs = new Set(keys.filter(k => ids.some(id => {
-    const a = plotsA.get(id)?.meta, b = plotsB.get(id)?.meta;
-    // Only a column both labelers have can differ; one-sided columns are kept as-is.
-    return a && b && k in a && k in b && String(a[k] ?? '').trim() !== String(b[k] ?? '').trim();
-  })));
-  let sA = _slug(names.A) || 'a', sB = _slug(names.B) || 'b';
-  if (sA === sB) { sA += '_a'; sB += '_b'; }
+  const { A: sA, B: sB } = _suffixes(names);
 
   const out = {};
   for (const id of ids) {
     const mA = plotsA.get(id)?.meta || {}, mB = plotsB.get(id)?.meta || {};
     const meta = {};
     for (const k of keys) {
-      if (differs.has(k)) {
-        meta[`${k}_${sA}`] = mA[k] ?? '';
-        meta[`${k}_${sB}`] = mB[k] ?? '';
-      } else if (k in mA || k in mB) {
-        meta[k] = mA[k] ?? mB[k];
-      }
+      meta[`${k}_${sA}`] = mA[k] ?? '';
+      meta[`${k}_${sB}`] = mB[k] ?? '';
     }
     out[id] = meta;
   }
@@ -404,6 +402,12 @@ function buildReview(projA, projB, opts = {}) {
     const rA = _labeled(resA[p.id]) ? resA[p.id] : null;
     const rB = _labeled(resB[p.id]) ? resB[p.id] : null;
     const item = { status: null, A: rA, B: rB, unitAgreementPct: null, unitsComparable: null, unitDiffIdx: [] };
+    // B's reference, only when it differs from A's (the export then splits ref_*).
+    const pA = plotsA.get(id), pB = plotsB.get(id);
+    if (pA && pB && (String(pA.refCode ?? '') !== String(pB.refCode ?? '') ||
+                     String(pA.refLabel ?? '') !== String(pB.refLabel ?? ''))) {
+      item.refB = { code: pB.refCode ?? null, label: pB.refLabel ?? null };
+    }
 
     if (compareBy) {
       _compareColumn(item, plotsA.get(id)?.meta?.[compareBy], plotsB.get(id)?.meta?.[compareBy], id);
@@ -480,4 +484,62 @@ function buildReview(projA, projB, opts = {}) {
   return { project, stats, warnings };
 }
 
-module.exports = { buildReview, UA_KEYS };
+/**
+ * Rename labeler A and/or B of a review project (mutates and returns it).
+ * Every place buildReview wrote a labeler's name is rewritten: the labelers
+ * block, the "A: x | B: y" values of consensus results, and the
+ * per-labeler uploaded-file columns (imperv_level_<a> / imperv_level_<b>).
+ * Values the reviewer submitted are their own and are left alone.
+ */
+function renameLabelers(project, newNames) {
+  const labelers = project.review.labelers;
+  const old = { A: labelers.A.name, B: labelers.B.name };
+  const nu  = {
+    A: String(newNames.A ?? '').trim() || old.A,
+    B: String(newNames.B ?? '').trim() || old.B,
+  };
+  if (nu.A === old.A && nu.B === old.B) return project;
+
+  // "<old A>: x | <old B>: y" → "<new A>: x | <new B>: y"
+  const head = `${old.A}: `, sep = ` | ${old.B}: `;
+  const fix = v => {
+    if (typeof v !== 'string' || !v.startsWith(head)) return v;
+    const i = v.indexOf(sep, head.length);
+    if (i < 0) return v;
+    return `${nu.A}: ${v.slice(head.length, i)} | ${nu.B}: ${v.slice(i + sep.length)}`;
+  };
+  for (const r of Object.values(project.results || {})) {
+    if (r?.resolvedBy !== 'consensus') continue;
+    for (const k of ['confidence', 'imageSource', 'imageDate', 'timeSpentSeconds']) {
+      if (k in r) r[k] = fix(r[k]);
+    }
+    if (r.annotations) {
+      for (const k of Object.keys(r.annotations)) r.annotations[k] = fix(r.annotations[k]);
+    }
+  }
+
+  // Suffixed columns come in pairs (<col>_<a>, <col>_<b>) in every plot; only
+  // such pairs are renamed, so an unrelated column ending in a name is safe.
+  const so = _suffixes(old), sn = _suffixes(nu);
+  for (const p of project.plots || []) {
+    if (!p.meta) continue;
+    const meta = {};
+    for (const [k, v] of Object.entries(p.meta)) {
+      let key = k;
+      for (const [side, other] of [['A', 'B'], ['B', 'A']]) {
+        const suf = `_${so[side]}`;
+        if (!k.endsWith(suf)) continue;
+        const base = k.slice(0, -suf.length);
+        if (`${base}_${so[other]}` in p.meta) { key = `${base}_${sn[side]}`; break; }
+      }
+      meta[key] = v;
+    }
+    p.meta = meta;
+  }
+
+  labelers.A.name = nu.A;
+  labelers.B.name = nu.B;
+  return project;
+}
+
+module.exports = { buildReview, renameLabelers, UA_KEYS };

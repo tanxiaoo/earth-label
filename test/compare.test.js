@@ -2,7 +2,7 @@
 // agreed results losslessly, and report agreement stats. Run with `npm test`.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { buildReview } = require('../server/lib/compare');
+const { buildReview, renameLabelers } = require('../server/lib/compare');
 
 const SCHEMA = [
   { code: 20, label: 'Forest',   color: '#548235' },
@@ -261,7 +261,7 @@ test('compare by column in grid/pixel mode keeps the unit rules (partial, merged
   assert.equal(rev.results['3'], undefined);
 });
 
-test('uploaded-file columns: identical kept once, different kept per labeler', () => {
+test('uploaded-file columns: always one per labeler, A\'s file order, A before B', () => {
   const withMeta = (name, metas) => {
     const p = project(name, {});
     p.plots = p.plots.map((pl, i) => ({ ...pl, meta: metas[i] }));
@@ -280,8 +280,63 @@ test('uploaded-file columns: identical kept once, different kept per labeler', (
     { tile: 'T4', imperv_level: '1/9' },
   ]);
   const rev = buildReview(A, B, { nameA: 'Xiao', nameB: 'Keerthana R.' }).project;
-  assert.deepEqual(rev.plots[0].meta, {
-    tile: 'T1', imperv_level_xiao: '7/9', imperv_level_keerthana_r: '7/9', a_only: 'x', b_only: 'y',
+  const full = {
+    tile_xiao: 'T1', tile_keerthana_r: 'T1',
+    imperv_level_xiao: '7/9', imperv_level_keerthana_r: '7/9',
+    a_only_xiao: 'x', a_only_keerthana_r: '',
+    b_only_xiao: '', b_only_keerthana_r: 'y',
+  };
+  assert.deepEqual(rev.plots[0].meta, full);
+  assert.deepEqual(Object.keys(rev.plots[0].meta), Object.keys(full));
+  // Same columns on every plot, whether or not the values differ.
+  for (const p of rev.plots) assert.deepEqual(Object.keys(p.meta), Object.keys(full));
+  assert.equal(rev.plots[2].meta.imperv_level_keerthana_r, '4/9');
+});
+
+test('B\'s reference is recorded only when it differs from A\'s', () => {
+  const A = project('A', {});
+  const B = project('B', {});
+  A.plots[0].refCode = 5; B.plots[0].refCode = 5;
+  A.plots[1].refCode = 5; B.plots[1].refCode = 6; B.plots[1].refLabel = 'Other';
+  const items = buildReview(A, B).project.review.items;
+  assert.equal(items['1'].refB, undefined);
+  assert.deepEqual(items['2'].refB, { code: 6, label: 'Other' });
+});
+
+test('renaming labelers rewrites names, merged values and per-labeler columns', () => {
+  const A = project('A', {
+    1: point(20, { confidence: 'High', annotations: { notes: 'dense' }, imageDate: '2024-05' }),
+    2: point(20),
   });
-  assert.deepEqual(rev.plots[2].meta, { tile: 'T3', imperv_level_xiao: '5/9', imperv_level_keerthana_r: '4/9' });
+  const B = project('B', {
+    1: point(20, { confidence: 'Low', annotations: { notes: 'sparse' }, imageDate: '2024-05' }),
+    2: point(8),
+  });
+  A.plots[0].meta = { level: '7/9' };
+  B.plots[0].meta = { level: '4/9' };
+  const rev = buildReview(A, B, { nameA: 'Xiao', nameB: 'Bo' }).project;
+  // A reviewer-submitted result holds the reviewer's own text — left alone.
+  rev.results[2] = { ...point(8, { confidence: 'Xiao: x | Bo: y' }), resolvedBy: 'reviewer' };
+
+  renameLabelers(rev, { A: 'Xiao Tan', B: 'Bo' });
+  assert.equal(rev.review.labelers.A.name, 'Xiao Tan');
+  assert.equal(rev.review.labelers.B.name, 'Bo');
+  assert.equal(rev.results[1].confidence, 'Xiao Tan: High | Bo: Low');
+  assert.equal(rev.results[1].annotations.notes, 'Xiao Tan: dense | Bo: sparse');
+  assert.equal(rev.results[1].imageDate, '2024-05');
+  assert.equal(rev.results[2].confidence, 'Xiao: x | Bo: y');
+  // Per-labeler columns follow the new name; key order is kept.
+  assert.deepEqual(Object.keys(rev.plots[0].meta), ['level_xiao_tan', 'level_bo']);
+  assert.equal(rev.plots[0].meta.level_xiao_tan, '7/9');
+  // Only paired columns are renamed (older reviews may hold unpaired ones).
+  rev.plots[1].meta = { ends_xiao_tan: 'keep' };
+  renameLabelers(rev, { A: 'X', B: 'Bo' });
+  assert.deepEqual(rev.plots[1].meta, { ends_xiao_tan: 'keep' });
+  assert.deepEqual(Object.keys(rev.plots[0].meta), ['level_x', 'level_bo']);
+  renameLabelers(rev, { A: 'Xiao Tan', B: 'Bo' });
+
+  // Unchanged names are a no-op.
+  const before = JSON.stringify(rev);
+  renameLabelers(rev, { A: 'Xiao Tan', B: '' });
+  assert.equal(JSON.stringify(rev), before);
 });

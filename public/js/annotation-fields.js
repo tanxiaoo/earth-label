@@ -159,9 +159,9 @@ function _renderEditorList() {
       `<option value="${t.value}" ${f.type === t.value ? 'selected' : ''}>${t.label}</option>`
     ).join('');
     row.innerHTML = `
-      <input type="text" class="key-input" value="${_attr(f.key)}" placeholder="key (snake_case)"
+      <input type="text" autocomplete="off" class="key-input" value="${_attr(f.key)}" placeholder="key (snake_case)"
              title="CSV column name" oninput="_editAnnoField(${i},'key',this.value)">
-      <input type="text" class="label-input" value="${_attr(f.label)}" placeholder="Label"
+      <input type="text" autocomplete="off" class="label-input" value="${_attr(f.label)}" placeholder="Label"
              title="Label shown in the sidebar" oninput="_editAnnoField(${i},'label',this.value)">
       <select class="type-input" onchange="_editAnnoField(${i},'type',this.value)">
         ${typeOptions}

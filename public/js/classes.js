@@ -84,11 +84,11 @@ function _renderEditorList() {
     row.innerHTML = `
       <input type="color" value="${cls.color}" title="Color"
              onchange="_editClass(${i},'color',this.value)">
-      <input type="text" class="code-input" value="${cls.code}" placeholder="Code"
+      <input type="text" autocomplete="off" class="code-input" value="${cls.code}" placeholder="Code"
              title="Numeric code" onchange="_editClass(${i},'code',parseInt(this.value)||0)">
-      <input type="text" class="label-input" value="${cls.label}" placeholder="Label"
+      <input type="text" autocomplete="off" class="label-input" value="${cls.label}" placeholder="Label"
              onchange="_editClass(${i},'label',this.value)">
-      <input type="text" class="key-input" value="${cls.key || ''}" placeholder="Key"
+      <input type="text" autocomplete="off" class="key-input" value="${cls.key || ''}" placeholder="Key"
              maxlength="1" title="Keyboard shortcut" onchange="_editClass(${i},'key',this.value)">
       <button class="del-btn" onclick="_deleteClass(${i})">✕</button>
     `;

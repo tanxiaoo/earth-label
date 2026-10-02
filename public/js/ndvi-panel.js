@@ -845,12 +845,12 @@ function renderGuideTable() {
     tr.innerHTML = `
       <td><span class="class-dot" style="background:${c.color || '#888'}"></span>${safeLabel}</td>
       <td class="ndvi-range-cell">
-        <input type="text" inputmode="decimal" data-field="min" value="${minVal}">
+        <input type="text" autocomplete="off" inputmode="decimal" data-field="min" value="${minVal}">
         <span class="sep">–</span>
-        <input type="text" inputmode="decimal" data-field="max" value="${maxVal}">
+        <input type="text" autocomplete="off" inputmode="decimal" data-field="max" value="${maxVal}">
       </td>
       <td class="ndvi-pattern-cell">
-        <input type="text" data-field="pattern" value="${safePattern}" placeholder="e.g. consistently high, almost flat">
+        <input type="text" autocomplete="off" data-field="pattern" value="${safePattern}" placeholder="e.g. consistently high, almost flat">
       </td>`;
     tbody.appendChild(tr);
   }

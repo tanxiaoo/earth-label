@@ -1,6 +1,7 @@
 import { state } from './state.js';
 import * as api from './api.js';
 import { gridCoverSizeM, pixelCoverSizeM } from './map.js';
+import { isResolvedResult, labelerSuffixes } from './review.js';
 
 function _download(content, filename, mime) {
   const a = Object.assign(document.createElement('a'), {
@@ -209,42 +210,178 @@ function _annoValue(plot, key) {
   return plot.annotations?.[key] ?? (key === 'notes' ? plot.notes ?? '' : '');
 }
 
-// ── Review columns (double-labeling review projects only) ────────────────
-// The row itself is the Final: its class, time, imagery and unit columns are
-// the reviewer's (or the merged consensus). Uploaded-file columns are already
-// merged per labeler in plot.meta (identical → once, different → suffixed
-// with each labeler's name). Appended at the very end: each labeler's class,
-// how the Final was reached, and — last — the A-vs-B `agreement` status,
-// which never changes after creation.
-function _reviewItem(plotId) {
-  return state.review?.items?.[plotId] || null;
+// ── Review export (double-labeling review projects only) ─────────────────
+// One fixed layout, whatever the data, so every review exports alike:
+//   merged  — PLOTID, LAT, LON, ref_code / ref_label (split only when A's and
+//             B's references differ), and the assessment settings (A and B
+//             assess with the same UA);
+//   split   — EarthLabel values and annotations, always as <col>_review
+//             (the reviewed Final) followed by <col>_<A name>, <col>_<B name>;
+//             uploaded-file columns as <col>_<A name>, <col>_<B name>, in the
+//             uploaded file's order;
+//   units   — cells_json … cell_N / sp_N: the reviewed Final's units;
+//   tail    — labeler names, how the Final was reached and, last, the
+//             A-vs-B `agreement` status, which never changes.
+// Column order otherwise follows the normal export.
+function _annotationsOf(r) {
+  if (!r) return {};
+  return r.annotations ?? (r.notes != null ? { notes: r.notes } : {});
 }
 
-function _reviewColumns() {
-  if (state.project?.type !== 'review') return [];
+function _modeOfResult(r) {
+  if (r?.assessmentMode) return r.assessmentMode;
+  if (r?.cells)          return 'grid';
+  if (r?.subPoints)      return 'pixel';
+  return r ? 'point' : state.assessmentMode;
+}
+
+function _reviewTable() {
+  const plots = state.plots;
+  const items = state.review?.items || {};
+  const suf   = labelerSuffixes();
+  const item  = p => items[p.id] || {};
+  const src   = (p, side) => item(p)[side] || null;
+  const pair  = (name, get) => [
+    [`${name}_${suf.A}`, p => get(p, 'A')],
+    [`${name}_${suf.B}`, p => get(p, 'B')],
+  ];
+  const annoFields = _annoFields();
+
+  // Reference: one column unless B's reference differs somewhere.
+  const refB = p => item(p).refB || { code: p.refCode, label: p.refLabel };
+  const refCols = plots.some(p => item(p).refB)
+    ? [...pair('ref_code',  (p, s) => s === 'A' ? p.refCode  : refB(p).code),
+       ...pair('ref_label', (p, s) => s === 'A' ? p.refLabel : refB(p).label)]
+    : [['ref_code', p => p.refCode], ['ref_label', p => p.refLabel]];
+
+  // The reviewed (Final) value first, then A's, then B's. The reviewer's own
+  // confidence / imagery / time / notes exist only on plots they submitted;
+  // agreed plots keep those values in the A and B columns.
+  const own    = p => { const r = _resultOf(p.id); return r?.resolvedBy === 'reviewer' ? r : null; };
+  const triple = (name, getReview, get) => [[`${name}_review`, getReview], ...pair(name, get)];
+
+  const valueCols = [
+    ...triple('class_code',   p => p.resultCode,               (p, s) => src(p, s)?.code),
+    ...triple('class_label',  p => p.resultLabel,              (p, s) => src(p, s)?.label),
+    ...triple('confidence',   p => own(p)?.confidence,         (p, s) => src(p, s)?.confidence),
+    ...triple('image_source', p => own(p)?.imageSource,        (p, s) => src(p, s)?.imageSource),
+    ...triple('image_date',   p => own(p)?.imageDate,          (p, s) => src(p, s)?.imageDate),
+    ...triple('time_spent_s', p => own(p)?.timeSpentSeconds,   (p, s) => src(p, s)?.timeSpentSeconds),
+  ];
+
+  // Assessment settings, merged: A's (else B's, else the Final's) result.
+  const setting  = p => src(p, 'A') || src(p, 'B') || _resultOf(p.id) || null;
+  const modes    = plots.map(p => _modeOfResult(setting(p)));
+  const incPixel = modes.includes('pixel');
+  const incGrid  = modes.includes('grid');
+  // The reviewed result's unit detail (same columns as a normal export).
+  const detail = (cols, skip) => cols.filter(([h]) => !skip.includes(h));
+  const settingCols = [
+    ['assessment_mode', p => _modeOfResult(setting(p))],
+    ...((incPixel || incGrid) ? [['ua_size_m', p => {
+      const r = setting(p);
+      return _modeOfResult(r) === 'point' ? '' : (r?.uaSizeM ?? state.plotSizeM);
+    }]] : []),
+    ...(incPixel ? [
+      ['sub_point_grid', p => {
+        const r = setting(p);
+        return _modeOfResult(r) === 'pixel' ? (r?.subPointGrid ?? state.subPointGrid) : '';
+      }],
+      ['sub_point_coverage_m', p => {
+        const r = setting(p);
+        if (_modeOfResult(r) !== 'pixel') return '';
+        return r?.subPoints ? (r.subPointCoverageM ?? r.uaSizeM ?? state.plotSizeM) : pixelCoverSizeM();
+      }],
+      ...detail(UA_CSV_COLUMNS, ['sub_point_grid', 'sub_point_coverage_m']),
+    ] : []),
+    ...(incGrid ? [
+      ['cell_grid', p => {
+        const r = setting(p);
+        return _modeOfResult(r) === 'grid' ? (r?.cellGrid ?? state.cellGrid) : '';
+      }],
+      ['cell_coverage_m', p => {
+        const r = setting(p);
+        return _modeOfResult(r) === 'grid' ? (r?.cellCoverageM ?? gridCoverSizeM()) : '';
+      }],
+      ...detail(GRID_CSV_COLUMNS, ['cell_grid', 'cell_coverage_m']),
+    ] : []),
+  ];
+
+  // Per-unit columns sp_N / cell_N: the reviewed labels.
+  const spCount   = incPixel ? _unitColCount('subPoints', 'pixel', state.subPointGrid) : 0;
+  const cellCount = incGrid  ? _unitColCount('cells',     'grid',  state.cellGrid)     : 0;
+  const unitCols = [
+    ..._unitHeaders('sp',   spCount)  .map((h, i) => [h, p => _unitValues(p, 'subPoints', spCount)[i]]),
+    ..._unitHeaders('cell', cellCount).map((h, i) => [h, p => _unitValues(p, 'cells',     cellCount)[i]]),
+  ];
+
+  const annoCols = annoFields.flatMap(f => triple(f.key,
+    p => _annotationsOf(own(p))[f.key],
+    (p, s) => _annotationsOf(src(p, s))[f.key]));
+
   const labeler = side => state.review?.labelers?.[side]?.name ?? '';
-  const src = (p, side) => _reviewItem(p.id)?.[side] || null;
-  return [
+  const tailCols = [
     ['labeler_a',          () => labeler('A')],
     ['labeler_b',          () => labeler('B')],
-    ['a_class_code',       p => src(p, 'A')?.code  ?? ''],
-    ['a_class_label',      p => src(p, 'A')?.label ?? ''],
-    ['b_class_code',       p => src(p, 'B')?.code  ?? ''],
-    ['b_class_label',      p => src(p, 'B')?.label ?? ''],
-    ['unit_agreement_pct', p => _reviewItem(p.id)?.unitAgreementPct ?? ''],
-    ['resolved_by',        p => _resultOf(p.id)?.resolvedBy ?? ''],
+    ['unit_agreement_pct', p => item(p).unitAgreementPct],
+    ['resolved_by',        p => _resultOf(p.id)?.resolvedBy],
+    // A "Partial" plot's merge the reviewer never confirmed is tagged "Proposed".
     ['reviewer',           p => {
       const r = _resultOf(p.id);
-      return r && r.resolvedBy !== 'consensus' ? (r.reviewer ?? '') : '';
+      if (r && !isResolvedResult(p.id, r)) return 'Proposed';
+      return r && r.resolvedBy !== 'consensus' ? r.reviewer : '';
     }],
     ...(state.review?.compareBy ? [['compare_by', () => state.review.compareBy]] : []),
-    ['agreement',          p => _reviewItem(p.id)?.status ?? ''],
+    ['agreement',          p => item(p).status],
   ];
+
+  const fixed = [
+    ['PLOTID', p => p.id], ['LAT', p => p.lat], ['LON', p => p.lon],
+    ...refCols, ...valueCols, ...settingCols, ...unitCols, ...annoCols,
+  ];
+
+  // Uploaded-file columns, already split per labeler in plot.meta
+  // (<col>_<A>, <col>_<B>). Reviews created before columns were always split
+  // kept identical columns once — those are written for both labelers.
+  const bases = [];
+  const seen  = new Set();
+  for (const p of plots) {
+    const m = p.meta || {};
+    for (const k of Object.keys(m)) {
+      let base = k;
+      for (const [side, other] of [['A', 'B'], ['B', 'A']]) {
+        const s = `_${suf[side]}`;
+        if (k.endsWith(s) && `${k.slice(0, -s.length)}_${suf[other]}` in m) { base = k.slice(0, -s.length); break; }
+      }
+      if (!seen.has(base)) { seen.add(base); bases.push(base); }
+    }
+  }
+  // Drop file columns that would collide with a computed one (a re-imported
+  // export): the computed value is authoritative.
+  const taken = new Set([...fixed, ...tailCols].map(([h]) => h));
+  const metaCols = bases
+    .flatMap(base => pair(base, (p, s) => {
+      const m = p.meta || {};
+      const key = `${base}_${suf[s]}`;
+      return key in m ? m[key] : m[base];
+    }))
+    .filter(([h]) => !taken.has(h));
+
+  return [...fixed, ...metaCols, ...tailCols];
 }
 
 export function exportCSV() {
   const { plots } = state;
   if (!plots.length) return;
+  const filename = `${_safeName(state.project?.name)}_results.csv`;
+
+  if (state.project?.type === 'review') {
+    const cols = _reviewTable();
+    const header = cols.map(([h]) => _csvEscape(h)).join(',');
+    const rows = plots.map(p => cols.map(([, get]) => _csvEscape(get(p))).join(','));
+    _download('﻿' + [header, ...rows].join('\n'), filename, 'text/csv;charset=utf-8');
+    return;
+  }
 
   const annoFields = _annoFields();
 
@@ -285,14 +422,12 @@ export function exportCSV() {
     ..._unitHeaders('cell', cellCount),
     ...annoFields.map(f => f.key),
   ];
-  const reviewCols    = _reviewColumns();
-  const emittedColSet = new Set([...emittedCols, ...reviewCols.map(([h]) => h)]);
+  const emittedColSet = new Set(emittedCols);
   const tailMetaKeys  = metaKeys.filter(k => !emittedColSet.has(k));
 
   const header = [
     ...emittedCols,
     ...tailMetaKeys,
-    ...reviewCols.map(([h]) => h),
   ].join(',');
 
   const rows = plots.map(p => [
@@ -302,10 +437,8 @@ export function exportCSV() {
     ..._unitValues(p, 'cells', cellCount).map(_csvEscape),
     ...annoFields.map(f => _csvEscape(_annoValue(p, f.key))),
     ...tailMetaKeys.map(k => _csvEscape(p.meta?.[k])),
-    ...reviewCols.map(([, get]) => _csvEscape(get(p))),
   ].join(','));
 
-  const filename = `${_safeName(state.project?.name)}_results.csv`;
   // Prepend UTF-8 BOM so Excel opens non-ASCII characters correctly.
   _download('﻿' + [header, ...rows].join('\n'), filename, 'text/csv;charset=utf-8');
 }
@@ -372,15 +505,14 @@ export function exportGeoJSON() {
 
   // Meta first, computed props last — a re-imported export file carries our
   // own column names in meta, and the freshly computed values must win.
-  const reviewCols = _reviewColumns();
+  // Reviews use the same fixed layout as their CSV.
+  const reviewCols = state.project?.type === 'review' ? _reviewTable() : null;
   const features = plots.map(p => ({
     type: 'Feature',
     geometry: p.geometry || { type: 'Point', coordinates: [p.lon, p.lat] },
-    properties: {
-      ...(p.meta || {}),
-      ..._geoJsonProps(p),
-      ...Object.fromEntries(reviewCols.map(([h, get]) => [h, get(p)])),
-    },
+    properties: reviewCols
+      ? Object.fromEntries(reviewCols.map(([h, get]) => [h, get(p) ?? '']))
+      : { ...(p.meta || {}), ..._geoJsonProps(p) },
   }));
 
   _download(

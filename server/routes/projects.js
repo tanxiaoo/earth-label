@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
 const { parseGIS } = require('../lib/gis-parser');
-const { buildReview } = require('../lib/compare');
+const { buildReview, renameLabelers } = require('../lib/compare');
 
 const DATA_DIR = path.join(__dirname, '../../data/projects');
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
@@ -72,7 +72,9 @@ router.get('/', (req, res) => {
           id: p.id, name: p.name, created: p.created, lastUsed: p.lastUsed,
           type: p.type || 'labeling',
           plotCount: (p.plots || []).length,
-          completedCount: Object.keys(p.results || {}).length,
+          // A review's auto-merged "Partial" plots wait for the reviewer.
+          completedCount: Object.entries(p.results || {}).filter(([id, r]) =>
+            !(p.type === 'review' && p.review?.items?.[id]?.status === 'agree_partial' && r.resolvedBy === 'consensus')).length,
         };
       } catch { return null; }
     })
@@ -193,11 +195,11 @@ router.post('/', upload.single('file'), async (req, res) => {
   res.json({ id });
 });
 
-// PATCH /api/projects/:id — incremental update (result, classSchema, annotationFields, ndviCacheUpdate, canopyCacheUpdate, name, lastUsed)
+// PATCH /api/projects/:id — incremental update (result, classSchema, annotationFields, ndviCacheUpdate, canopyCacheUpdate, name, reviewSettings, lastUsed)
 router.patch('/:id', (req, res) => {
   if (!fs.existsSync(projPath(req.params.id))) return res.status(404).json({ error: 'Not found' });
   const proj = readProj(req.params.id);
-  const { plotId, result, classSchema, annotationFields, ndviCacheUpdate, canopyCacheUpdate, name, lastUsed, uaSettings } = req.body;
+  const { plotId, result, classSchema, annotationFields, ndviCacheUpdate, canopyCacheUpdate, name, lastUsed, uaSettings, reviewSettings } = req.body;
 
   if (plotId && result) {
     proj.results = proj.results || {};
@@ -225,6 +227,19 @@ router.patch('/:id', (req, res) => {
     };
   }
   if (name)        proj.name = name;
+  // Review names. The reviewer is stamped on plots submitted from now on
+  // (resolved plots keep theirs); labeler renames rewrite the whole project.
+  if (reviewSettings) {
+    if (proj.type !== 'review' || !proj.review) return res.status(400).json({ error: 'Not a review project' });
+    const s = reviewSettings;
+    const clean = v => String(v ?? '').trim();
+    if ([s.name, s.reviewer, s.labelerA, s.labelerB].some(v => !clean(v))) {
+      return res.status(400).json({ error: 'All names are required' });
+    }
+    proj.name = clean(s.name);
+    proj.review.reviewer = clean(s.reviewer);
+    renameLabelers(proj, { A: clean(s.labelerA), B: clean(s.labelerB) });
+  }
   if (uaSettings) {
     if (uaSettings.assessmentMode       != null) proj.assessmentMode       = uaSettings.assessmentMode;
     if (uaSettings.plotSizeM            != null) proj.plotSizeM            = uaSettings.plotSizeM;
